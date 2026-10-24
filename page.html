@@ -1,0 +1,216 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Worker table</title>
+<link rel="icon" href="data:,">
+<style>
+  :root {
+    --bg: #f6f5f3; --fg: #1c1917; --muted: #78716c; --line: #e7e5e4; --card: #fff;
+    --accent: #2563eb; --accent-soft: #dbeafe; --track: #e7e5e4; --ok: #16a34a; --mid: #f0a04b; --hot: #dc2626;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #141210; --fg: #f5f5f4; --muted: #a8a29e; --line: #2e2a27; --card: #1f1c1a;
+      --accent: #60a5fa; --accent-soft: #1e3a5f; --track: #3a3532; --ok: #4ade80; --mid: #f0a04b; --hot: #f87171;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.5 system-ui, -apple-system, sans-serif; }
+  main { max-width: 880px; margin: 0 auto; padding: 32px 16px 56px; }
+  header { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+  h1 { font-size: 22px; margin: 0; letter-spacing: -0.01em; }
+  .session { font-size: 14px; color: var(--muted); }
+  .session b { color: var(--fg); }
+  h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 32px 0 10px; font-weight: 600; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; }
+
+  #quotas { display: grid; gap: 12px; }
+  .quota { padding: 16px 18px 18px; }
+  .who { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+  .who b { font-size: 16px; }
+  .tag { font-size: 11px; padding: 1px 8px; border-radius: 99px; background: var(--accent-soft); color: var(--accent); }
+  .wins { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px 32px; }
+  .win .top { display: flex; justify-content: space-between; font-size: 15px; }
+  .win .top span { color: var(--muted); }
+  .win .top b { font-variant-numeric: tabular-nums; }
+  .bar { height: 10px; background: var(--track); border-radius: 5px; overflow: hidden; margin: 10px 0 12px; }
+  .bar i { display: block; height: 100%; border-radius: 5px; background: var(--accent); transition: width .4s; }
+  .bar i.mid { background: var(--mid); }
+  .bar i.hot { background: var(--hot); }
+  .reset { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .reset b { color: var(--fg); font-weight: 600; }
+  .na { color: var(--muted); font-size: 13px; }
+
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 10px 14px; }
+  th { font-size: 12px; color: var(--muted); font-weight: 600; border-bottom: 1px solid var(--line); }
+  tr + tr td { border-top: 1px solid var(--line); }
+  td:last-child { width: 1%; text-align: right; }
+  select, input, button { font: inherit; color: inherit; background: var(--bg); border: 1px solid var(--line); border-radius: 7px; padding: 6px 10px; }
+  select:focus, input:focus, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  input { width: 100%; max-width: 180px; }
+  button { cursor: pointer; }
+  .x { border: none; background: none; color: var(--muted); padding: 4px 8px; }
+  .x:hover { color: var(--hot); }
+  .bottom { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-top: 14px; }
+  .bottom .grow { flex: 1; }
+  #confirm { background: var(--accent); color: #fff; border-color: var(--accent); padding: 9px 22px; font-weight: 600; }
+  .hint { font-size: 13px; color: var(--muted); margin: 10px 2px 0; }
+  #status { color: var(--hot); font-size: 13px; }
+
+  @media (max-width: 600px) {
+    .quota { grid-template-columns: 1fr; gap: 8px; }
+    th:nth-child(3), td:nth-child(3) { padding-left: 0; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Worker table</h1>
+    <div class="session" id="session"></div>
+  </header>
+
+  <h2>Quotas</h2>
+  <div id="quotas"></div>
+
+  <h2>Roles</h2>
+  <div class="card">
+    <table>
+      <thead><tr><th>Role</th><th>Runs on</th><th>Effort</th><th></th></tr></thead>
+      <tbody id="roles"></tbody>
+    </table>
+  </div>
+  <p class="hint">Runs on this session's account as its own subagents, or as one-shot headless runs on the other CLI, which only return a report. A role not listed runs as implementer.</p>
+  <div class="bottom">
+    <button id="add">+ Add role</button>
+    <label id="accountBox" hidden>External account <select id="account"></select></label>
+    <span class="grow"></span>
+    <span id="status"></span>
+    <button id="confirm">Confirm and start</button>
+  </div>
+</main>
+<script>
+const S = __STATE__;
+const $ = id => document.getElementById(id);
+const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+const ext = S.accounts[S.other];
+const extName = () => ext.length > 1 ? ext[$('account').selectedIndex].name : (ext[0] || {name: S.other}).name;
+
+$('session').innerHTML = '';
+$('session').append('Session ', el('b', null, S.session.name), ` · ${S.repo}`);
+
+// Quotas: one row per account, read in parallel; a failed read shows n/a.
+function left(epoch) {
+  let m = Math.max(0, Math.round((epoch * 1000 - Date.now()) / 60000));
+  const d = Math.floor(m / 1440), h = Math.floor(m % 1440 / 60); m %= 60;
+  return d ? `${d}d ${h}h` : h ? `${h}h ${m}m` : `${m}m`;
+}
+const when = epoch => new Date(epoch * 1000).toLocaleString([], {weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hourCycle: 'h23'});
+const timers = [];
+setInterval(() => timers.forEach(f => f()), 30000);
+
+for (const p of ['claude', 'codex']) S.accounts[p].forEach((a, i) => {
+  const row = el('div', 'card quota');
+  const who = el('div', 'who');
+  who.append(el('b', null, a.name));
+  if (p === S.provider && a.folder === S.session.folder) who.append(el('span', 'tag', 'this session'));
+  else if (p === S.other) { const t = el('span', 'tag', 'external'); t.dataset.ext = i; who.append(t); }
+  const wins = el('div', 'wins');
+  wins.append(el('span', 'na', 'reading…'));
+  row.append(who, wins);
+  $('quotas').append(row);
+  fetch(`quota/${p}/${i}`).then(r => r.json()).then(q => {
+    wins.innerHTML = '';
+    if (q.error || !q.windows.length) { const na = el('span', 'na', 'n/a'); na.title = q.error || 'no windows'; wins.append(na); return; }
+    for (const w of q.windows) {
+      const box = el('div', 'win');
+      const top = el('div', 'top');
+      top.append(el('span', null, w.label), el('b', null, `${Math.round(w.used)}% used`));
+      const bar = el('div', 'bar'), fill = el('i', w.used >= 90 ? 'hot' : w.used >= 70 ? 'mid' : '');
+      fill.style.width = Math.min(100, w.used) + '%';
+      bar.append(fill);
+      const reset = el('div', 'reset');
+      const paint = () => { reset.innerHTML = ''; if (w.resets) reset.append('resets in ', el('b', null, left(w.resets)), ` · ${when(w.resets)}`); };
+      paint(); timers.push(paint);
+      box.append(top, bar, reset);
+      wins.append(box);
+    }
+  }).catch(() => { wins.innerHTML = ''; wins.append(el('span', 'na', 'n/a')); });
+});
+
+// Roles: "Runs on" lists the models grouped under their account; values are "native|sonnet".
+const provOf = runs => runs === 'native' ? S.provider : S.other;
+const runsLabel = runs => runs === 'native' ? `${S.session.name} · this session` : `${extName()} · external`;
+function runsSelect(r) {
+  const s = el('select', 'runs');
+  for (const runs of r.role === 'implementer' ? ['native'] : ['native', 'external']) {
+    const g = el('optgroup');
+    g.label = runsLabel(runs); g.dataset.runs = runs;
+    for (const m of Object.keys(S.models[provOf(runs)])) g.append(new Option(m, `${runs}|${m}`, false, r.runs === runs && r.model === m));
+    s.append(g);
+  }
+  return s;
+}
+function fillEfforts(effort, runs, want) {
+  const [r, m] = runs.value.split('|');
+  const list = S.models[provOf(r)][m];
+  effort.innerHTML = '';
+  for (const e of list) effort.add(new Option(e, e, false, e === (list.includes(want) ? want : 'medium')));
+}
+function addRow(r) {
+  const tr = el('tr');
+  const name = el('input');
+  name.value = r.role; name.placeholder = 'role name'; name.spellcheck = false;
+  const runs = runsSelect(r), effort = el('select');
+  fillEfforts(effort, runs, r.effort);
+  runs.onchange = () => fillEfforts(effort, runs, effort.value);
+  const del = el('button', 'x', '✕');
+  del.title = 'Remove'; del.onclick = () => tr.remove();
+  if (r.role === 'implementer') {  // always native: the orchestrator needs it, and unlisted roles fall back to it
+    name.readOnly = true; name.title = 'Always native'; del.style.visibility = 'hidden';
+  }
+  for (const c of [name, runs, effort, del]) { const td = el('td'); td.append(c); tr.append(td); }
+  $('roles').append(tr);
+  return name;
+}
+if (ext.length > 1) {
+  $('accountBox').hidden = false;
+  ext.forEach(a => $('account').add(new Option(a.name, a.name, false, a.folder === S.table.account)));
+  $('account').onchange = () => {
+    document.querySelectorAll('optgroup[data-runs=external]').forEach(g => {
+      g.label = runsLabel('external');
+    });
+    markExternal();
+  };
+}
+function markExternal() {
+  document.querySelectorAll('[data-ext]').forEach(t => { t.hidden = ext.length > 1 && +t.dataset.ext !== $('account').selectedIndex; });
+}
+markExternal();
+
+S.table.roles.forEach(addRow);
+$('add').onclick = () => addRow({role: '', runs: 'external', model: Object.keys(S.models[S.other])[0], effort: 'medium'}).focus();
+
+$('confirm').onclick = async () => {
+  const roles = [...$('roles').rows].map(tr => {
+    const [name, runs, effort] = tr.querySelectorAll('input, select');
+    const [r, model] = runs.value.split('|');
+    return {role: name.value.trim().toLowerCase(), runs: r, model, effort: effort.value};
+  }).filter(r => r.role);
+  const account = ext.length > 1 ? ext[$('account').selectedIndex].folder : (ext[0] || {}).folder ?? null;
+  const res = await fetch('confirm', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({roles, account})});
+  if (res.ok) {
+    document.body.innerHTML = '';
+    const m = el('main');
+    m.append(el('h1', null, 'Session starting'), el('p', 'hint', 'Back to the terminal. You can close this tab.'));
+    document.body.append(m);
+  } else {
+    $('status').textContent = 'Not valid: ' + ((await res.json()).error || res.status);
+  }
+};
+</script>
+</body>
+</html>
