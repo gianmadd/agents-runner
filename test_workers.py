@@ -1,5 +1,8 @@
 """python3 -m unittest discover -s skills/agents-setup/workers"""
 import datetime
+import json
+import os
+import tempfile
 import unittest
 import zoneinfo
 
@@ -82,6 +85,47 @@ class Table(unittest.TestCase):
         self.assertIn("CLAUDE_CONFIG_DIR=~/.claude-work claude -p --model <model> --effort <effort>", text)
         self.assertIn("write_stdin", text)
 
+class Lead(unittest.TestCase):
+    def test_validate_lead(self):
+        lead = workers.validate_lead({"provider": "claude", "account": 1, "model": "opus", "effort": "high"}, {"claude": ACCOUNTS, "codex": [{"folder": None, "name": "codex"}]})
+        self.assertEqual(lead["folder"], "~/.claude-work")
+        for bad in ({"provider": "codex", "account": 1, "model": "default", "effort": "default"},
+                    {"provider": "claude", "account": "0", "model": "default", "effort": "default"},
+                    {"provider": "claude", "account": 0, "model": "default", "effort": "high"},
+                    {"provider": "claude", "account": 0, "model": "opus", "effort": "ultra"}):
+            with self.assertRaises(ValueError):
+                workers.validate_lead(bad, {"claude": ACCOUNTS, "codex": [{"folder": None, "name": "codex"}]})
+
+    def test_resume_only_listed_sessions(self):
+        all_ = {"claude": ACCOUNTS, "codex": [{"folder": None, "name": "codex"}]}
+        listed = [{"provider": "claude", "account": 1, "id": "abc"}]
+        lead = workers.validate_lead({"provider": "claude", "account": 1, "model": "opus", "effort": "high", "resume": "abc"}, all_, listed)
+        self.assertEqual((lead["resume"], lead["update"]), ("abc", False))
+        with self.assertRaises(ValueError):  # same id, other account
+            workers.validate_lead({"provider": "claude", "account": 0, "model": "opus", "effort": "high", "resume": "abc"}, all_, listed)
+
+    def test_resume_argv(self):
+        lead = {"provider": "claude", "model": "sonnet", "effort": "high", "resume": "abc", "update": False}
+        self.assertEqual(workers.launch_argv(lead, "T"), ["claude", "--resume", "abc", "--model", "sonnet", "--effort", "high"])
+        self.assertEqual(workers.launch_argv({**lead, "update": True}, "T")[-4:],
+                         ["--system-prompt-snapshot", "off", "--append-system-prompt", "T"])
+        argv = workers.launch_argv({**lead, "provider": "codex", "model": "gpt-6.1-sol", "update": True}, "T")
+        self.assertEqual(argv[:2] + argv[-2:-1], ["codex", "resume", "abc"])
+        self.assertTrue(argv[-1].endswith("\n\nT"))
+
+    def test_claude_model_keeps_the_accounts_variant(self):
+        with tempfile.TemporaryDirectory() as d:
+            with open(os.path.join(d, "settings.json"), "w") as f:
+                json.dump({"model": "opus[1m]"}, f)
+            self.assertEqual(workers.claude_model("opus", d), "opus[1m]")
+            self.assertEqual(workers.claude_model("sonnet", d), "sonnet")
+            self.assertEqual(workers.claude_model("opus", os.path.join(d, "missing")), "opus")
+
+    def test_launch_argv(self):
+        self.assertEqual(workers.launch_argv({"provider": "claude", "model": "sonnet", "effort": "high", "update": True}, "T"),
+                         ["claude", "--model", "sonnet", "--effort", "high", "--append-system-prompt", "T"])
+        self.assertEqual(workers.launch_argv({"provider": "codex", "model": "gpt-6.1-sol", "effort": "high", "update": True}, "T"),
+                         ["codex", "-m", "gpt-6.1-sol", "-c", "model_reasoning_effort=high", "-c", 'developer_instructions="T"'])
 
 DEFAULT_ROLES = workers.load_table({}, "codex")["roles"]
 ACCOUNTS = [{"folder": None, "name": "claude"}, {"folder": "~/.claude-work", "name": "claude-work"}]

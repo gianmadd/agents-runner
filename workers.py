@@ -1,12 +1,14 @@
-"""`claude --workers` / `codex --workers`: pick this session's worker table on a local page, then start the CLI with it.
+"""`fns`: pick on a local page which CLI to start (claude, claude-work, codex…) and its worker table, then start it here.
 
-Usage (from the shell functions in workers.sh): python3 workers.py <claude|codex> [cli args…]
+Usage (from the shell function in workers.sh): python3 workers.py
 """
+import hashlib
 import http.server
 import json
 import os
 import re
 import secrets
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -18,11 +20,20 @@ import webbrowser
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 _E5 = ["low", "medium", "high", "xhigh", "max"]
-# Worker models per provider, the first is the default, each with the efforts its CLI accepts (codex: ~/.codex/models_cache.json).
+# Worker models per provider, weakest first, each with the efforts its CLI accepts (codex: ~/.codex/models_cache.json).
 MODELS = {
-    "claude": {"sonnet": _E5, "opus": _E5, "haiku": _E5},
-    "codex": {"gpt-6-luna": _E5, "gpt-6.1-sol": _E5 + ["ultra"], "gpt-5.6-terra": _E5 + ["ultra"]},
+    "claude": {"haiku": _E5, "sonnet": _E5, "opus": _E5},
+    "codex": {"gpt-6-luna": _E5, "gpt-5.6-terra": _E5 + ["ultra"], "gpt-6.1-sol": _E5 + ["ultra"]},
 }
+DEFAULT_MODEL = {"claude": "sonnet", "codex": "gpt-6-luna"}
+# The account external runs use until a table is saved, by alias name; falls back to the first account.
+DEFAULT_EXTERNAL = {"claude": "claude-work"}
+# Orchestrator models, weakest first; LEAD_DEFAULT is preselected (opus as the Setup's Subagents entry, sol as Codex's config).
+LEADS = {
+    "claude": {"haiku": _E5, "sonnet": _E5, "opus": _E5, "fable": _E5},
+    "codex": {"gpt-6-luna": _E5, "gpt-5.6-terra": _E5 + ["ultra"], "gpt-6.1-sol": _E5 + ["ultra"]},
+}
+LEAD_DEFAULT = {"claude": {"model": "opus", "effort": "medium"}, "codex": {"model": "gpt-6.1-sol", "effort": "medium"}}
 OTHER = {"claude": "codex", "codex": "claude"}
 ENV = {"claude": "CLAUDE_CONFIG_DIR", "codex": "CODEX_HOME"}
 DEFAULT_DIR = {"claude": "~/.claude", "codex": "~/.codex"}
@@ -61,7 +72,7 @@ def logged_in(provider, folder):
     if sys.platform != "darwin":
         return os.path.exists(os.path.join(os.path.expanduser(path or DEFAULT_DIR["claude"]), ".credentials.json"))
     # Keychain item per folder: "Claude Code-credentials" + "-" + sha256(folder)[:8] when the env var is set.
-    import hashlib, unicodedata
+    import unicodedata
     service = "Claude Code-credentials"
     if path:
         service += "-" + hashlib.sha256(unicodedata.normalize("NFC", path).encode()).hexdigest()[:8]
@@ -83,15 +94,6 @@ def accounts(provider):
         if os.path.realpath(expand(folder)) != default and folder not in [a["folder"] for a in found]:
             found.append({"folder": folder, "name": name})
     return [a for a in found if logged_in(provider, a["folder"])]
-
-
-def session_account(provider, accs):
-    """The account this launch runs on, from the env var the alias set."""
-    current = os.environ.get(ENV[provider])
-    for a in accs:
-        if a["folder"] and current and os.path.realpath(expand(a["folder"])) == os.path.realpath(expand(current)):
-            return a
-    return {"folder": current, "name": os.path.basename(current).lstrip(".") if current else provider}
 
 
 def env_for(provider, account):
@@ -186,6 +188,88 @@ def read_quota(provider, account):
         proc.kill()
 
 
+# --- Recent sessions of this folder, to resume (undocumented session files: may change with the CLIs) ---
+
+def first_text(content):
+    """A user message's text without the command tags Claude wraps slash commands in."""
+    if isinstance(content, list):
+        content = " ".join(c.get("text", "") for c in content if isinstance(c, dict))
+    return re.sub(r"<[^>]+>", " ", str(content)).split()
+
+
+def claude_sessions(folder, cwd, limit):
+    project = os.path.join(expand(folder or DEFAULT_DIR["claude"]), "projects", re.sub(r"[^A-Za-z0-9]", "-", cwd))
+    try:
+        files = sorted((os.path.join(project, f) for f in os.listdir(project) if f.endswith(".jsonl")), key=os.path.getmtime, reverse=True)
+    except OSError:
+        return []
+    found = []
+    for path in files:
+        title, first, interactive = None, None, False
+        with open(path, errors="replace") as f:
+            for line in f:
+                if '"ai-title"' in line or '"custom-title"' in line:
+                    d = json.loads(line)
+                    title = d.get("customTitle") or d.get("aiTitle") or title
+                elif first is None and '"type":"user"' in line:
+                    d = json.loads(line)
+                    interactive = d.get("entrypoint") == "cli"
+                    if not interactive:
+                        break
+                    if not d.get("isMeta"):
+                        first = " ".join(first_text(d.get("message", {}).get("content", "")))[:100] or None
+        if interactive:
+            found.append({"id": os.path.basename(path)[:-6], "title": title or first or "(no title)", "time": os.path.getmtime(path)})
+            if len(found) == limit:
+                break
+    return found
+
+
+def codex_sessions(folder, cwd, limit):
+    home = expand(folder or DEFAULT_DIR["codex"])
+    names = {}
+    try:
+        with open(os.path.join(home, "session_index.jsonl")) as f:
+            for line in f:
+                d = json.loads(line)
+                names[d.get("id")] = d.get("thread_name")
+    except (OSError, ValueError):
+        pass
+    found = []
+    for root, dirs, files in os.walk(os.path.join(home, "sessions"), topdown=True):
+        dirs.sort(reverse=True)  # YYYY/MM/DD: newest first
+        for name in sorted(files, reverse=True):
+            if not name.startswith("rollout-"):
+                continue
+            path = os.path.join(root, name)
+            with open(path, errors="replace") as f:
+                meta = json.loads(f.readline() or "{}").get("payload", {})
+                # Subagents carry a dict as source, headless runs "exec": only sessions you typed in.
+                if meta.get("cwd") != cwd or meta.get("source") not in ("cli", "vscode"):
+                    continue
+                first = None
+                for line in f:
+                    if '"user_message"' in line:
+                        first = " ".join(first_text(json.loads(line)["payload"].get("message", "")))[:100]
+                        break
+            found.append({"id": meta["id"], "title": names.get(meta["id"]) or first or "(no title)", "time": os.path.getmtime(path)})
+            if len(found) == limit:
+                return found
+    return found
+
+
+def recent_sessions(all_accounts, cwd, limit=10):
+    """The last sessions started in cwd, per account, newest first."""
+    found = []
+    for p, read in (("claude", claude_sessions), ("codex", codex_sessions)):
+        for i, a in enumerate(all_accounts[p]):
+            try:
+                found += [{**x, "provider": p, "account": i} for x in read(a["folder"], cwd, limit)]
+            except (OSError, ValueError, KeyError):
+                pass  # an unreadable store just lists nothing
+    return sorted(found, key=lambda x: -x["time"])
+
+
 # --- The table: saved per repo, injected per session ---
 
 def table_file():
@@ -207,7 +291,7 @@ def load_table(saved, provider):
     """The provider's last confirmed table, else the default; rows without a model get the default model."""
     table = saved.get(provider) or json.loads(json.dumps(DEFAULT_TABLE))
     for row in table.get("roles", []):
-        row.setdefault("model", next(iter(MODELS[provider if row.get("runs") == "native" else OTHER[provider]])))
+        row.setdefault("model", DEFAULT_MODEL[provider if row.get("runs") == "native" else OTHER[provider]])
     return table
 
 
@@ -268,16 +352,54 @@ This session's worker table, chosen at launch. When a skill spawns a worker (imp
 """
 
 
-# --- The page: a one-shot local server ---
+# --- The page: a one-shot local server, shown in a native window ---
 
-def pick_table(provider, saved):
-    other = OTHER[provider]
+def window_app():
+    """The native window (window.swift), compiled once per source version; None without swiftc: the browser then shows the page."""
+    src = os.path.join(HERE, "window.swift")
+    with open(src, "rb") as f:
+        out = os.path.join(os.path.expanduser("~/.cache/fns"), hashlib.sha256(f.read()).hexdigest()[:12], "fns")  # named fns in the menu bar
+    if os.path.exists(out):
+        return out
+    if sys.platform != "darwin" or not shutil.which("swiftc"):
+        return None
+    print("Building the fns window (once)…", file=sys.stderr)
+    os.makedirs(os.path.dirname(out), exist_ok=True)
+    built = subprocess.run(["swiftc", "-O", src, "-o", out + ".tmp"], capture_output=True, text=True)
+    if built.returncode:
+        print(built.stderr[-500:], file=sys.stderr)
+        return None
+    os.replace(out + ".tmp", out)
+    return out
+
+
+def validate_lead(body, all_accounts, sessions=()):
+    """Which CLI and account to start, with its model and effort; resume only a session the server listed."""
+    provider, index = body.get("provider"), body.get("account")
+    if provider not in LEADS or not isinstance(index, int) or not 0 <= index < len(all_accounts[provider]):
+        raise ValueError("bad session account")
+    model, effort = body.get("model"), body.get("effort")
+    if model not in LEADS[provider] or effort not in LEADS[provider][model]:
+        raise ValueError("bad session model")
+    resume = body.get("resume")
+    if resume is not None and not any(x["id"] == resume and x["provider"] == provider and x["account"] == index for x in sessions):
+        raise ValueError("unknown session")
+    return {"provider": provider, "folder": all_accounts[provider][index]["folder"], "model": model, "effort": effort,
+            "resume": resume, "update": bool(body.get("update")) if resume else True}
+
+
+def pick(saved):
     token = secrets.token_urlsafe(16)
     all_accounts = {p: accounts(p) for p in ("claude", "codex")}
-    session = session_account(provider, all_accounts[provider])
-    state = {"provider": provider, "other": other, "repo": os.path.basename(os.getcwd()), 
-             "models": MODELS, "accounts": all_accounts, "session": session, "table": saved}
+    state = {"repo": os.path.basename(os.getcwd()), "models": MODELS, "defaultModel": DEFAULT_MODEL, "leads": LEADS, "leadDefault": LEAD_DEFAULT, "accounts": all_accounts,
+             "tables": {p: load_table(saved, p) for p in ("claude", "codex")}, "lead": saved.get("lead") or {}}
+    for p, t in state["tables"].items():
+        if p not in saved:
+            t["account"] = next((a["folder"] for a in all_accounts[OTHER[p]] if a["name"] == DEFAULT_EXTERNAL.get(OTHER[p])), t["account"])
     chosen = {}
+    sessions = []
+    reader = threading.Thread(target=lambda: sessions.extend(recent_sessions(all_accounts, os.getcwd())))
+    reader.start()
 
     class Handler(http.server.BaseHTTPRequestHandler):
         def log_message(self, *args):
@@ -296,6 +418,9 @@ def pick_table(provider, saved):
                 with open(os.path.join(HERE, "page.html")) as f:
                     page = f.read().replace("__STATE__", json.dumps(state).replace("</", "<\\/"))
                 self.reply(200, page, "text/html; charset=utf-8")
+            elif self.path == f"/{token}/sessions":
+                reader.join()
+                self.reply(200, json.dumps(sessions))
             elif self.path.startswith(f"/{token}/quota/"):
                 p, _, i = self.path[len(f"/{token}/quota/"):].partition("/")
                 try:
@@ -311,7 +436,9 @@ def pick_table(provider, saved):
                 return self.reply(404, "{}")
             try:
                 body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))))
-                chosen["table"] = validate(body, provider, all_accounts[other])
+                reader.join()
+                lead = validate_lead(body.get("lead", {}), all_accounts, sessions)
+                chosen.update(lead=lead, table=validate(body, lead["provider"], all_accounts[OTHER[lead["provider"]]]))
             except (ValueError, AttributeError) as e:
                 return self.reply(400, json.dumps({"error": str(e)}))
             self.reply(200, "{}")
@@ -319,30 +446,67 @@ def pick_table(provider, saved):
 
     server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
     url = f"http://127.0.0.1:{server.server_address[1]}/{token}/"
-    print(f"Confirm the worker table in the browser: {url}", file=sys.stderr)
-    webbrowser.open(url)
+    print(f"Pick the session in the window ({url})", file=sys.stderr)
+    app = window_app()
+    viewer = subprocess.Popen([app, url]) if app else None
+    if viewer:  # closing the window without Start cancels
+        threading.Thread(target=lambda: (viewer.wait(), server.shutdown()), daemon=True).start()
+    else:
+        webbrowser.open(url)
     try:
         server.serve_forever()
     except KeyboardInterrupt:
+        chosen.clear()
+    if viewer and viewer.poll() is None:
+        viewer.terminate()
+    if "table" not in chosen:
         sys.exit(130)
-    table = chosen["table"]
-    external = next((a["name"] for a in all_accounts[other] if a["folder"] == table["account"]), other)
-    return table, {"native": session["name"], "external": external}
+    lead, table = chosen["lead"], chosen["table"]
+    name = lambda p, folder: next((a["name"] for a in all_accounts[p] if a["folder"] == folder), p)
+    names = {"native": name(lead["provider"], lead["folder"]), "external": name(OTHER[lead["provider"]], table["account"])}
+    return lead, table, names
+
+
+def claude_model(model, folder):
+    """The account's own variant of the picked model, e.g. "opus" → "opus[1m]" when its settings say so."""
+    try:
+        with open(os.path.join(expand(folder or DEFAULT_DIR["claude"]), "settings.json")) as f:
+            own = json.load(f).get("model") or ""
+    except (OSError, ValueError, AttributeError):
+        return model
+    return own if re.fullmatch(re.escape(model) + r"\[\w+\]", own) else model
+
+
+def launch_argv(lead, text):
+    """New session: the table goes in as instructions. Resume: kept as it was, or, with update, Claude re-renders its
+    system prompt for this launch only (the recorded one returns on a later plain resume) and Codex, which keeps its
+    first instructions, gets the table as the first message."""
+    p, flags, resume = lead["provider"], [], lead.get("resume")
+    if p == "claude":
+        flags += ["--model", claude_model(lead["model"], lead.get("folder")), "--effort", lead["effort"]]
+        if not resume:
+            return ["claude", *flags, "--append-system-prompt", text]
+        update = ["--system-prompt-snapshot", "off", "--append-system-prompt", text] if lead["update"] else []
+        return ["claude", "--resume", resume, *flags, *update]
+    flags += ["-m", lead["model"], "-c", f"model_reasoning_effort={lead['effort']}"]
+    if not resume:
+        return ["codex", *flags, "-c", "developer_instructions=" + json.dumps(text)]  # a JSON string is a valid TOML string
+    update = ["The worker table of this session changed. From now on follow this one, not the one in your instructions.\n\n" + text] if lead["update"] else []
+    return ["codex", "resume", *flags, resume, *update]
 
 
 def main():
-    provider, args = sys.argv[1], [a for a in sys.argv[2:] if a != "--workers"]
     path = table_file()
     saved = load_saved(path) if path else {}
-    table, names = pick_table(provider, load_table(saved, provider))
+    lead, table, names = pick(saved)
     if path:
+        last = {k: lead[k] for k in ("provider", "folder", "model", "effort")}
         with open(path, "w") as f:
-            json.dump({**saved, provider: table}, f, indent=2)
-    text = instructions(provider, table, names)
-    if provider == "claude":
-        argv = ["claude", *args, "--append-system-prompt", text]
-    else:
-        argv = ["codex", "-c", "developer_instructions=" + json.dumps(text), *args]  # a JSON string is a valid TOML string
+            json.dump({**saved, "lead": last, **({lead["provider"]: table} if lead["update"] else {})}, f, indent=2)
+    os.environ.pop(ENV[lead["provider"]], None)  # the default account needs the env var unset
+    if lead["folder"]:
+        os.environ[ENV[lead["provider"]]] = expand(lead["folder"])
+    argv = launch_argv(lead, instructions(lead["provider"], table, names))
     os.execvp(argv[0], argv)
 
 

@@ -3,106 +3,189 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Worker table</title>
+<title>Start a session</title>
 <link rel="icon" href="data:,">
 <style>
   :root {
-    --bg: #f6f5f3; --fg: #1c1917; --muted: #78716c; --line: #e7e5e4; --card: #fff;
-    --accent: #2563eb; --accent-soft: #dbeafe; --track: #e7e5e4; --ok: #16a34a; --mid: #f0a04b; --hot: #dc2626;
+    --bg: #f6f5f3; --fg: #1c1917; --muted: #78716c; --faint: #a8a29e; --line: #e7e5e4; --card: #fff; --hover: #f3f2f0;
+    --claude: #d97757; --claude-soft: #fbeee8; --codex: #3b82f6; --codex-soft: #e8f0fe;
+    --track: #ebe9e7; --hot: #dc2626;
   }
   @media (prefers-color-scheme: dark) {
     :root {
-      --bg: #141210; --fg: #f5f5f4; --muted: #a8a29e; --line: #2e2a27; --card: #1f1c1a;
-      --accent: #60a5fa; --accent-soft: #1e3a5f; --track: #3a3532; --ok: #4ade80; --mid: #f0a04b; --hot: #f87171;
+      --bg: #141210; --fg: #f5f5f4; --muted: #a8a29e; --faint: #78716c; --line: #2e2a27; --card: #1f1c1a; --hover: #29251f;
+      --claude-soft: #3a241b; --codex-soft: #172540; --track: #34302d; --hot: #f87171;
     }
   }
   * { box-sizing: border-box; }
-  body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.5 system-ui, -apple-system, sans-serif; }
-  main { max-width: 880px; margin: 0 auto; padding: 32px 16px 56px; }
-  header { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
-  h1 { font-size: 22px; margin: 0; letter-spacing: -0.01em; }
-  .session { font-size: 14px; color: var(--muted); }
-  .session b { color: var(--fg); }
-  h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 32px 0 10px; font-weight: 600; }
-  .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; }
-
-  #quotas { display: grid; gap: 12px; }
-  .quota { padding: 16px 18px 18px; }
-  .who { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
-  .who b { font-size: 16px; }
-  .tag { font-size: 11px; padding: 1px 8px; border-radius: 99px; background: var(--accent-soft); color: var(--accent); }
-  .wins { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px 32px; }
-  .win .top { display: flex; justify-content: space-between; font-size: 15px; }
-  .win .top span { color: var(--muted); }
-  .win .top b { font-variant-numeric: tabular-nums; }
-  .bar { height: 10px; background: var(--track); border-radius: 5px; overflow: hidden; margin: 10px 0 12px; }
-  .bar i { display: block; height: 100%; border-radius: 5px; background: var(--accent); transition: width .4s; }
-  .bar i.mid { background: var(--mid); }
-  .bar i.hot { background: var(--hot); }
-  .reset { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
-  .reset b { color: var(--fg); font-weight: 600; }
-  .na { color: var(--muted); font-size: 13px; }
-
-  table { width: 100%; border-collapse: collapse; }
-  th, td { text-align: left; padding: 10px 14px; }
-  th { font-size: 12px; color: var(--muted); font-weight: 600; border-bottom: 1px solid var(--line); }
-  tr + tr td { border-top: 1px solid var(--line); }
-  td:last-child { width: 1%; text-align: right; }
-  select, input, button { font: inherit; color: inherit; background: var(--bg); border: 1px solid var(--line); border-radius: 7px; padding: 6px 10px; }
-  select:focus, input:focus, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
-  input { width: 100%; max-width: 180px; }
+  [hidden] { display: none !important; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.5 system-ui, -apple-system, sans-serif; }
+  button, input { font: inherit; color: inherit; }
   button { cursor: pointer; }
-  .x { border: none; background: none; color: var(--muted); padding: 4px 8px; }
-  .x:hover { color: var(--hot); }
-  .bottom { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-top: 14px; }
-  .bottom .grow { flex: 1; }
-  #confirm { background: var(--accent); color: #fff; border-color: var(--accent); padding: 9px 22px; font-weight: 600; }
-  .hint { font-size: 13px; color: var(--muted); margin: 10px 2px 0; }
-  #status { color: var(--hot); font-size: 13px; }
+  :focus-visible { outline: 2px solid var(--fg); outline-offset: 2px; }
+  .claude { --c: var(--claude); --cs: var(--claude-soft); }
+  .codex { --c: var(--codex); --cs: var(--codex-soft); }
 
-  @media (max-width: 600px) {
-    .quota { grid-template-columns: 1fr; gap: 8px; }
-    th:nth-child(3), td:nth-child(3) { padding-left: 0; }
+  .layout { display: grid; grid-template-columns: 340px 1fr; gap: 20px; max-width: 1160px; margin: 0 auto; padding: 24px 16px 40px; align-items: start; }
+  aside { position: sticky; top: 16px; display: grid; gap: 14px; }
+  h1 { font-size: 18px; margin: 0; letter-spacing: -0.01em; }
+  .repo { font-size: 12px; color: var(--muted); }
+  h2 { font-size: 11px; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); margin: 0 0 8px; font-weight: 600; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; }
+  .faint { color: var(--faint); font-size: 12px; }
+
+  /* Account cards */
+  .acc { display: block; width: 100%; text-align: left; padding: 11px 13px; margin-bottom: 8px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; transition: border-color .15s, box-shadow .15s; }
+  .acc:hover { border-color: var(--faint); }
+  .acc.lead { border-color: var(--c); box-shadow: 0 0 0 1px var(--c); }
+  .acc .name { display: flex; align-items: center; gap: 7px; }
+  .acc .name b { font-size: 14px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--c); flex: none; }
+  .role-tag { margin-left: auto; font-size: 11px; font-weight: 600; padding: 0 8px; border-radius: 99px; }
+  .role-tag.lead { background: var(--c); color: #fff; }
+  .role-tag.ext { background: var(--cs); color: var(--c); }
+  .wins { display: grid; gap: 5px; margin-top: 8px; }
+  .win { display: grid; grid-template-columns: 62px 1fr 34px; gap: 2px 8px; align-items: center; font-size: 12px; }
+  .win .lbl { color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .win .pct { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
+  .bar { height: 6px; background: var(--track); border-radius: 3px; overflow: hidden; }
+  .bar i { display: block; height: 100%; background: var(--c); border-radius: 3px; }
+  .bar i.hot { background: var(--hot); }
+  .win .when { grid-column: 2 / -1; color: var(--faint); font-size: 11px; font-variant-numeric: tabular-nums; min-height: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .win .note { font-size: 11px; }
+  .win .note.hot { color: var(--hot); font-weight: 600; }
+
+  /* Segmented pickers, used everywhere instead of dropdowns */
+  .seg { display: inline-flex; flex-wrap: wrap; gap: 3px; padding: 3px; background: var(--hover); border-radius: 9px; }
+  .seg button { border: 0; background: none; padding: 3px 9px; border-radius: 6px; font-size: 13px; color: var(--muted); white-space: nowrap; }
+  .seg button:hover { color: var(--fg); }
+  .seg button[aria-pressed="true"] { background: var(--card); color: var(--fg); font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,.12); }
+  .seg .grp { display: inline-flex; flex-wrap: wrap; gap: 3px; align-items: center; }
+  .seg .grp + .grp { margin-left: 4px; padding-left: 7px; border-left: 1px solid var(--line); }
+  .seg .grp button[aria-pressed="true"] { background: var(--c); color: #fff; }
+  .seg .who { font-size: 11px; color: var(--c); font-weight: 600; padding: 0 3px 0 4px; }
+  .field { display: grid; gap: 5px; }
+  .field > span { font-size: 12px; color: var(--muted); }
+
+  .summary { font-size: 13px; color: var(--muted); }
+  .summary b { color: var(--fg); }
+  #start { width: 100%; border: 0; border-radius: 10px; padding: 11px; font-weight: 700; color: #fff; background: var(--c, var(--fg)); }
+  #status { color: var(--hot); font-size: 12px; }
+
+  /* Right column */
+  .main { display: grid; gap: 22px; min-width: 0; }
+  .head { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; min-height: 30px; }
+  .head h2 { margin: 0; }
+  .chips { display: flex; gap: 5px; flex-wrap: wrap; }
+  .chip { font-size: 12px; padding: 2px 10px; border-radius: 99px; border: 1px solid var(--line); background: var(--card); color: var(--muted); }
+  .chip.on { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+  #sessions { max-height: calc(5 * 41px + 2px); overflow-y: auto; }
+  .sess { display: grid; grid-template-columns: 100px 1fr auto; gap: 10px; align-items: center; width: 100%; height: 41px; border: 0; background: none; padding: 0 14px; text-align: left; border-bottom: 1px solid var(--line); }
+  .sess:last-child { border-bottom: 0; }
+  .sess:hover { background: var(--hover); }
+  .sess.picked { background: var(--cs); box-shadow: inset 3px 0 0 var(--c); }
+  .sess .tag { justify-self: start; font-size: 11px; font-weight: 600; padding: 0 8px; border-radius: 99px; background: var(--cs); color: var(--c); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .sess .title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .sess .ago { font-size: 12px; color: var(--faint); white-space: nowrap; }
+  .empty { padding: 12px 14px; color: var(--faint); font-size: 13px; }
+  .update { display: flex; align-items: center; gap: 8px; margin-top: 8px; font-size: 13px; color: var(--muted); }
+
+  #workers.locked .rows, #workers.locked .tools { opacity: .4; pointer-events: none; }
+  .wrow { display: grid; grid-template-columns: 130px 1fr auto; gap: 8px 14px; align-items: center; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+  .wrow .role { font-weight: 600; }
+  .wrow .role input { width: 100%; border: 1px solid var(--line); background: var(--bg); border-radius: 7px; padding: 3px 8px; font-weight: 600; }
+  .wrow .role small { display: block; font-weight: 400; color: var(--faint); font-size: 11px; }
+  .wrow .runs { grid-column: 2; justify-self: start; display: flex; flex-wrap: wrap; gap: 8px; }
+  .wrow .eff { grid-column: 2; justify-self: start; }
+  .x { grid-row: 1; grid-column: 3; border: 0; background: none; color: var(--faint); padding: 4px 6px; }
+  .x:hover { color: var(--hot); }
+  .tools { display: flex; gap: 10px; align-items: center; padding: 10px 14px; }
+  .add { border: 1px dashed var(--line); background: none; border-radius: 8px; padding: 4px 12px; color: var(--muted); }
+  .hint { font-size: 12px; color: var(--faint); margin: 6px 2px 0; }
+
+  @media (max-width: 760px) {
+    .layout { grid-template-columns: 1fr; }
+    aside { position: static; }
+    .wrow { grid-template-columns: 1fr auto; }
+    .wrow .eff, .wrow .runs { grid-column: 1 / -1; }
+    .x { grid-column: 2; }
+    .sess { grid-template-columns: 1fr auto; }
+    .sess .tag { display: none; }
   }
 </style>
 </head>
 <body>
-<main>
-  <header>
-    <h1>Worker table</h1>
-    <div class="session" id="session"></div>
-  </header>
-
-  <h2>Quotas</h2>
-  <div id="quotas"></div>
-
-  <h2>Roles</h2>
-  <div class="card">
-    <table>
-      <thead><tr><th>Role</th><th>Runs on</th><th>Effort</th><th></th></tr></thead>
-      <tbody id="roles"></tbody>
-    </table>
-  </div>
-  <p class="hint">Runs on this session's account as its own subagents, or as one-shot headless runs on the other CLI, which only return a report. A role not listed runs as implementer.</p>
-  <div class="bottom">
-    <button id="add">+ Add role</button>
-    <label id="accountBox" hidden>External account <select id="account"></select></label>
-    <span class="grow"></span>
+<div class="layout">
+  <aside>
+    <div><h1>Start a session</h1><span class="repo" id="repo"></span></div>
+    <div>
+      <h2>Lead</h2>
+      <div id="accounts"></div>
+    </div>
+    <div class="card" style="padding:12px 13px;display:grid;gap:10px">
+      <div class="field"><span>Model</span><div id="leadModel"></div></div>
+      <div class="field"><span>Effort</span><div id="leadEffort"></div></div>
+    </div>
+    <div class="summary" id="summary"></div>
+    <button id="start">Start</button>
     <span id="status"></span>
-    <button id="confirm">Confirm and start</button>
+  </aside>
+
+  <div class="main">
+    <section>
+      <div class="head"><h2>Recent sessions here</h2><div class="chips" id="chips"></div></div>
+      <div class="card" id="sessions"><div class="empty">Reading…</div></div>
+      <label class="update" id="updateBox" hidden><input type="checkbox" id="update"> Update the worker table (otherwise it keeps the one it started with)</label>
+    </section>
+
+    <section>
+      <div class="head"><h2>Workers</h2><span id="extBox"></span></div>
+      <div class="card" id="workers">
+        <div class="rows" id="roles"></div>
+        <div class="tools"><button class="add" id="add">+ Add role</button></div>
+      </div>
+      <p class="hint">Native: the session's own subagents. External: one-shot runs on the other CLI that only return a report. A role not listed runs as implementer, which is always native.</p>
+    </section>
   </div>
-</main>
+</div>
+
 <script>
 const S = __STATE__;
 const $ = id => document.getElementById(id);
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
-const ext = S.accounts[S.other];
-const extName = () => ext.length > 1 ? ext[$('account').selectedIndex].name : (ext[0] || {name: S.other}).name;
+const OTHER = {claude: 'codex', codex: 'claude'};
+const short = m => m.replace(/^gpt-[\d.]+-/, '').replace('[1m]', ' 1M');  // gpt-6-luna → luna, opus[1m] → opus 1M
+let prov = null, leadIdx = 0, resume = null, sessions = null, filter = 'all';
+const extIdx = {claude: 0, codex: 0};
+const lead = {model: null, effort: null};
+const ext = () => S.accounts[OTHER[prov]];
+const extName = () => (ext()[extIdx[prov]] || {name: OTHER[prov]}).name;
+const leadName = () => S.accounts[prov][leadIdx].name;
+const accName = (p, i) => (S.accounts[p][i] || {name: p}).name;
+const provOf = runs => runs === 'native' ? prov : OTHER[prov];
+const table = () => S.tables[prov];
+$('repo').textContent = S.repo;
 
-$('session').innerHTML = '';
-$('session').append('Session ', el('b', null, S.session.name), ` · ${S.repo}`);
+// A segmented picker: groups of options, one value pressed; a group with cls takes that provider's color.
+function seg(groups, value, onPick) {
+  const box = el('div', 'seg');
+  for (const g of groups) {
+    const wrap = g.cls ? el('span', 'grp ' + g.cls) : box;
+    if (g.who) wrap.append(el('span', 'who', g.who));
+    for (const o of g.options) {
+      const b = el('button', null, o.label ?? o.value);
+      b.type = 'button';
+      b.setAttribute('aria-pressed', o.value === value);
+      b.onclick = () => onPick(o.value);
+      wrap.append(b);
+    }
+    if (wrap !== box) box.append(wrap);
+  }
+  return box;
+}
+const opts = list => list.map(v => ({value: v, label: short(v)}));
 
-// Quotas: one row per account, read in parallel; a failed read shows n/a.
+// --- Accounts: quota cards; a click makes one the lead ---
 function left(epoch) {
   let m = Math.max(0, Math.round((epoch * 1000 - Date.now()) / 60000));
   const d = Math.floor(m / 1440), h = Math.floor(m % 1440 / 60); m %= 60;
@@ -113,100 +196,197 @@ const timers = [];
 setInterval(() => timers.forEach(f => f()), 30000);
 
 for (const p of ['claude', 'codex']) S.accounts[p].forEach((a, i) => {
-  const row = el('div', 'card quota');
-  const who = el('div', 'who');
-  who.append(el('b', null, a.name));
-  if (p === S.provider && a.folder === S.session.folder) who.append(el('span', 'tag', 'this session'));
-  else if (p === S.other) { const t = el('span', 'tag', 'external'); t.dataset.ext = i; who.append(t); }
-  const wins = el('div', 'wins');
-  wins.append(el('span', 'na', 'reading…'));
-  row.append(who, wins);
-  $('quotas').append(row);
+  const card = el('button', 'acc ' + p);
+  card.type = 'button'; card.dataset.p = p; card.dataset.i = i;
+  card.onclick = () => { resume = null; selectLead(p, i); };
+  const name = el('div', 'name');
+  name.append(el('span', 'dot'), el('b', null, a.name), el('span', 'faint', p === 'codex' ? 'Codex' : 'Claude Code'), el('span', 'role-tag'));
+  // Two fixed rows (5h, 7d) from the start, so the card keeps its size when the quota arrives.
+  const wins = el('div', 'wins'), rows = {};
+  for (const label of ['5h', '7d']) {
+    const row = el('div', 'win'), bar = el('div', 'bar'), fill = el('i'), pct = el('span', 'pct', '–');
+    fill.style.width = '0';
+    const at = el('div', 'when'), t = el('span', null, 'reading…'), notes = el('span');
+    bar.append(fill);
+    at.append(t, notes);
+    row.append(el('span', 'lbl', label), bar, pct, at);
+    wins.append(row);
+    rows[label] = {fill, pct, t, notes};
+  }
+  card.append(name, wins);
+  $('accounts').append(card);
+  const fail = why => { for (const r of Object.values(rows)) { r.pct.textContent = 'n/a'; r.t.textContent = 'quota n/a'; r.t.title = why || ''; } };
   fetch(`quota/${p}/${i}`).then(r => r.json()).then(q => {
-    wins.innerHTML = '';
-    if (q.error || !q.windows.length) { const na = el('span', 'na', 'n/a'); na.title = q.error || 'no windows'; wins.append(na); return; }
+    if (q.error || !q.windows.length) return fail(q.error);
+    const notes = [];
     for (const w of q.windows) {
-      const box = el('div', 'win');
-      const top = el('div', 'top');
-      top.append(el('span', null, w.label), el('b', null, `${Math.round(w.used)}% used`));
-      const bar = el('div', 'bar'), fill = el('i', w.used >= 90 ? 'hot' : w.used >= 70 ? 'mid' : '');
-      fill.style.width = Math.min(100, w.used) + '%';
-      bar.append(fill);
-      const reset = el('div', 'reset');
-      const paint = () => { reset.innerHTML = ''; if (w.resets) reset.append('resets in ', el('b', null, left(w.resets)), ` · ${when(w.resets)}`); };
+      const r = rows[w.label];
+      if (!r) { notes.push(w); continue; }  // a per-model weekly limit (e.g. "7d Fable") goes on the 7d line
+      r.fill.style.width = Math.min(100, w.used) + '%';
+      r.fill.className = w.used >= 90 ? 'hot' : '';
+      r.pct.textContent = `${Math.round(w.used)}%`;
+      const paint = () => { r.t.textContent = w.resets ? `in ${left(w.resets)} · ${when(w.resets)}` : ''; };
       paint(); timers.push(paint);
-      box.append(top, bar, reset);
-      wins.append(box);
     }
-  }).catch(() => { wins.innerHTML = ''; wins.append(el('span', 'na', 'n/a')); });
+    for (const n of notes) rows['7d'].notes.append(el('span', n.used >= 90 ? 'note hot' : 'note', ` · ${n.label.replace(/^7d /, '')} ${Math.round(n.used)}%`));
+    for (const r of Object.values(rows)) if (r.pct.textContent === '–') { r.pct.textContent = 'n/a'; r.t.textContent = ''; }
+  }).catch(() => fail());
 });
+function markCards() {
+  document.querySelectorAll('.acc').forEach(c => {
+    const p = c.dataset.p, i = +c.dataset.i, tag = c.querySelector('.role-tag');
+    const isLead = p === prov && i === leadIdx, isExt = p !== prov && i === extIdx[prov];
+    c.classList.toggle('lead', isLead);
+    c.setAttribute('aria-pressed', isLead);
+    tag.className = 'role-tag' + (isLead ? ' lead' : isExt ? ' ext' : '');
+    tag.textContent = isLead ? 'lead' : isExt ? 'external' : '';
+  });
+  $('start').className = prov;
+}
 
-// Roles: "Runs on" lists the models grouped under their account; values are "native|sonnet".
-const provOf = runs => runs === 'native' ? S.provider : S.other;
-const runsLabel = runs => runs === 'native' ? `${S.session.name} · this session` : `${extName()} · external`;
-function runsSelect(r) {
-  const s = el('select', 'runs');
-  for (const runs of r.role === 'implementer' ? ['native'] : ['native', 'external']) {
-    const g = el('optgroup');
-    g.label = runsLabel(runs); g.dataset.runs = runs;
-    for (const m of Object.keys(S.models[provOf(runs)])) g.append(new Option(m, `${runs}|${m}`, false, r.runs === runs && r.model === m));
-    s.append(g);
+// --- Lead model and effort ---
+function renderLead() {
+  const models = Object.keys(S.leads[prov]);
+  if (!models.includes(lead.model)) lead.model = S.leadDefault[prov].model;
+  const efforts = S.leads[prov][lead.model];
+  if (!efforts.includes(lead.effort)) lead.effort = efforts.includes(S.leadDefault[prov].effort) ? S.leadDefault[prov].effort : 'medium';
+  $('leadModel').replaceChildren(seg([{cls: prov, options: opts(models)}], lead.model, m => { lead.model = m; renderLead(); }));
+  $('leadEffort').replaceChildren(seg([{cls: prov, options: opts(efforts)}], lead.effort, e => { lead.effort = e; renderLead(); }));
+  summary();
+}
+
+// --- Workers: rows built from S.tables[prov]; pickers edit it in place ---
+function renderWorkers() {
+  const box = $('roles');
+  box.replaceChildren();
+  for (const r of table().roles) {
+    const row = el('div', 'wrow');
+    const role = el('div', 'role');
+    if (r.role === 'implementer') {
+      role.append('implementer', el('small', null, 'always native'));
+    } else {
+      const name = el('input');
+      name.value = r.role; name.placeholder = 'role name'; name.spellcheck = false; name.setAttribute('aria-label', 'Role name');
+      name.oninput = () => { r.role = name.value.trim().toLowerCase(); };
+      role.append(name);
+    }
+    const groups = [{who: leadName(), cls: prov, options: opts(Object.keys(S.models[prov])).map(o => ({...o, value: 'native|' + o.value}))}];
+    if (r.role !== 'implementer') groups.push({who: extName(), cls: OTHER[prov], options: opts(Object.keys(S.models[OTHER[prov]])).map(o => ({...o, value: 'external|' + o.value}))});
+    const pick = v => {
+      [r.runs, r.model] = v.split('|');
+      if (!S.models[provOf(r.runs)][r.model].includes(r.effort)) r.effort = 'medium';
+      renderWorkers();
+    };
+    const runs = el('div', 'runs');
+    for (const g of groups) runs.append(seg([g], `${r.runs}|${r.model}`, pick));
+    const eff = seg([{cls: provOf(r.runs), options: opts(S.models[provOf(r.runs)][r.model])}], r.effort, e => { r.effort = e; renderWorkers(); });
+    eff.classList.add('eff');
+    row.append(role, runs);
+    if (r.role !== 'implementer') {
+      const x = el('button', 'x', '✕');
+      x.title = 'Remove role'; x.setAttribute('aria-label', 'Remove role');
+      x.onclick = () => { table().roles.splice(table().roles.indexOf(r), 1); renderWorkers(); };
+      row.append(x);
+    }
+    row.append(eff);
+    box.append(row);
   }
-  return s;
+  // External account: a picker only when the other CLI has more than one subscription.
+  $('extBox').replaceChildren(ext().length > 1
+    ? seg([{who: 'external', cls: OTHER[prov], options: ext().map((a, i) => ({value: i, label: a.name}))}], extIdx[prov], i => { extIdx[prov] = i; renderWorkers(); summary(); })
+    : '');
+  markCards();
 }
-function fillEfforts(effort, runs, want) {
-  const [r, m] = runs.value.split('|');
-  const list = S.models[provOf(r)][m];
-  effort.innerHTML = '';
-  for (const e of list) effort.add(new Option(e, e, false, e === (list.includes(want) ? want : 'medium')));
-}
-function addRow(r) {
-  const tr = el('tr');
-  const name = el('input');
-  name.value = r.role; name.placeholder = 'role name'; name.spellcheck = false;
-  const runs = runsSelect(r), effort = el('select');
-  fillEfforts(effort, runs, r.effort);
-  runs.onchange = () => fillEfforts(effort, runs, effort.value);
-  const del = el('button', 'x', '✕');
-  del.title = 'Remove'; del.onclick = () => tr.remove();
-  if (r.role === 'implementer') {  // always native: the orchestrator needs it, and unlisted roles fall back to it
-    name.readOnly = true; name.title = 'Always native'; del.style.visibility = 'hidden';
+$('add').onclick = () => {
+  table().roles.push({role: '', runs: 'external', model: S.defaultModel[OTHER[prov]], effort: 'medium'});
+  renderWorkers();
+  [...$('roles').querySelectorAll('input')].pop().focus();
+};
+
+// Each CLI keeps its own table: picking an account of the other CLI shows that one.
+function selectLead(p, i) {
+  leadIdx = i;  // before rendering: the rows' labels read the lead's name
+  if (p !== prov) {
+    prov = p;
+    extIdx[p] = Math.max(0, ext().findIndex(a => a.folder === table().account));
+    const last = S.lead.provider === p ? S.lead : S.leadDefault[p];  // an invalid saved value falls back in renderLead
+    Object.assign(lead, {model: last.model, effort: last.effort});
   }
-  for (const c of [name, runs, effort, del]) { const td = el('td'); td.append(c); tr.append(td); }
-  $('roles').append(tr);
-  return name;
+  renderWorkers();
+  renderLead();
+  renderSessions();
 }
-if (ext.length > 1) {
-  $('accountBox').hidden = false;
-  ext.forEach(a => $('account').add(new Option(a.name, a.name, false, a.folder === S.table.account)));
-  $('account').onchange = () => {
-    document.querySelectorAll('optgroup[data-runs=external]').forEach(g => {
-      g.label = runsLabel('external');
-    });
-    markExternal();
+
+// --- Recent sessions: one merged list, 5 in view, scrollable; a click selects one to resume ---
+fetch('sessions').then(r => r.json()).then(list => { sessions = list; renderChips(); renderSessions(); })
+  .catch(() => { sessions = []; renderSessions(); $('sessions').firstChild.textContent = 'Could not read the sessions.'; });
+const key = x => `${x.provider}|${x.account}`;
+function renderChips() {
+  const keys = [...new Set(sessions.map(key))];
+  $('chips').replaceChildren();
+  if (keys.length < 2) return;
+  for (const k of ['all', ...keys]) {
+    const [p, i] = k.split('|');
+    const c = el('button', 'chip' + (filter === k ? ' on' : ''), k === 'all' ? 'All' : accName(p, +i));
+    c.onclick = () => { filter = k; renderChips(); renderSessions(); };
+    $('chips').append(c);
+  }
+}
+function ago(epoch) {
+  const m = Math.round((Date.now() - epoch * 1000) / 60000);
+  return m < 60 ? `${Math.max(1, m)}m ago` : m < 1440 ? `${Math.round(m / 60)}h ago` : `${Math.round(m / 1440)}d ago`;
+}
+function renderSessions() {
+  const box = $('sessions');
+  if (sessions === null) return lockWorkers();  // still reading: keep "Reading…"
+  box.replaceChildren();
+  const shown = sessions.filter(x => filter === 'all' || key(x) === filter);
+  if (!shown.length) box.append(el('div', 'empty', sessions.length ? 'No sessions for this account.' : 'No sessions started in this folder yet.'));
+  for (const x of shown) {
+    const row = el('button', `sess ${x.provider}` + (resume && resume.id === x.id ? ' picked' : ''));
+    row.append(el('span', 'tag', accName(x.provider, x.account)), el('span', 'title', x.title), el('span', 'ago', ago(x.time)));
+    row.title = resume && resume.id === x.id ? 'Click again for a new session' : 'Resume this session';
+    row.onclick = () => {
+      resume = resume && resume.id === x.id ? null : x;
+      if (resume) { $('update').checked = false; selectLead(x.provider, x.account); } else renderSessions();
+    };
+    box.append(row);
+  }
+  $('updateBox').hidden = !resume;
+  lockWorkers();
+}
+$('update').onchange = lockWorkers;
+function lockWorkers() {
+  $('workers').classList.toggle('locked', !!resume && !$('update').checked);
+  summary();
+}
+
+function summary() {
+  if (!prov) return;
+  const s = $('summary');
+  s.replaceChildren();
+  const extra = `${short(lead.model)} · ${lead.effort}`;
+  if (resume) s.append('Resume ', el('b', null, resume.title), ` on ${leadName()} · `, $('update').checked ? 'new workers' : 'same workers');
+  else s.append('New session on ', el('b', null, leadName()), ` · ${extra} · external on ${extName()}`);
+}
+
+// Start from the last choice made in this repo.
+const startP = S.lead.provider && S.accounts[S.lead.provider] ? S.lead.provider : 'claude';
+selectLead(startP, Math.max(0, S.accounts[startP].findIndex(a => a.folder === (S.lead.folder ?? null))));
+
+$('start').onclick = async () => {
+  const body = {
+    lead: {provider: prov, account: leadIdx, model: lead.model, effort: lead.effort, resume: resume && resume.id, update: $('update').checked},
+    roles: table().roles.filter(r => r.role),
+    account: (ext()[extIdx[prov]] || {}).folder ?? null,
   };
-}
-function markExternal() {
-  document.querySelectorAll('[data-ext]').forEach(t => { t.hidden = ext.length > 1 && +t.dataset.ext !== $('account').selectedIndex; });
-}
-markExternal();
-
-S.table.roles.forEach(addRow);
-$('add').onclick = () => addRow({role: '', runs: 'external', model: Object.keys(S.models[S.other])[0], effort: 'medium'}).focus();
-
-$('confirm').onclick = async () => {
-  const roles = [...$('roles').rows].map(tr => {
-    const [name, runs, effort] = tr.querySelectorAll('input, select');
-    const [r, model] = runs.value.split('|');
-    return {role: name.value.trim().toLowerCase(), runs: r, model, effort: effort.value};
-  }).filter(r => r.role);
-  const account = ext.length > 1 ? ext[$('account').selectedIndex].folder : (ext[0] || {}).folder ?? null;
-  const res = await fetch('confirm', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({roles, account})});
+  const res = await fetch('confirm', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)});
   if (res.ok) {
-    document.body.innerHTML = '';
-    const m = el('main');
-    m.append(el('h1', null, 'Session starting'), el('p', 'hint', 'Back to the terminal. You can close this tab.'));
-    document.body.append(m);
+    const done = el('div', 'layout');
+    done.style.display = 'block';
+    done.append(el('h1', null, resume ? `Resuming on ${leadName()}` : `Starting ${leadName()}`), el('p', 'faint', 'Back to the terminal. You can close this tab.'));
+    document.body.replaceChildren(done);
+    window.close();  // works for a tab with one history entry, as the launcher opens it; otherwise the message stays
   } else {
     $('status').textContent = 'Not valid: ' + ((await res.json()).error || res.status);
   }
