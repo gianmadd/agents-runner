@@ -17,9 +17,12 @@ final class Window: NSObject, NSApplicationDelegate, NSWindowDelegate, WKUIDeleg
         window.contentView = web
         window.delegate = self
         window.center()
+        // No Dock icon (accessory), so macOS won't bring it forward on its own: keep it above other windows while it's open.
+        window.level = .floating
         window.makeKeyAndOrderFront(nil)
-        window.orderFrontRegardless()  // in front even if macOS refuses to activate an app started from a terminal
-        NSApp.activate()
+        window.makeFirstResponder(web)  // typing right away opens the page's spotlight
+        window.orderFrontRegardless()
+        NSApp.activate(ignoringOtherApps: true)
         web.load(URLRequest(url: url))
     }
 

@@ -8,90 +8,85 @@
 <style>
   :root {
     --bg: #f6f5f3; --fg: #1c1917; --muted: #78716c; --faint: #a8a29e; --line: #e7e5e4; --card: #fff; --hover: #f3f2f0;
-    --claude: #d97757; --claude-soft: #fbeee8; --codex: #3b82f6; --codex-soft: #e8f0fe;
     --track: #ebe9e7; --hot: #dc2626;
   }
+  /* Dark follows the system until the toggle picks a theme for this window. */
   @media (prefers-color-scheme: dark) {
-    :root {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
       --bg: #141210; --fg: #f5f5f4; --muted: #a8a29e; --faint: #78716c; --line: #2e2a27; --card: #1f1c1a; --hover: #29251f;
-      --claude-soft: #3a241b; --codex-soft: #172540; --track: #34302d; --hot: #f87171;
+      --track: #34302d; --hot: #f87171;
     }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #141210; --fg: #f5f5f4; --muted: #a8a29e; --faint: #78716c; --line: #2e2a27; --card: #1f1c1a; --hover: #29251f;
+    --track: #34302d; --hot: #f87171;
   }
   * { box-sizing: border-box; }
   [hidden] { display: none !important; }
+  html, body { height: 100%; }
   body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.5 system-ui, -apple-system, sans-serif; }
   button, input { font: inherit; color: inherit; }
   button { cursor: pointer; }
   :focus-visible { outline: 2px solid var(--fg); outline-offset: 2px; }
-  .claude { --c: var(--claude); --cs: var(--claude-soft); }
-  .codex { --c: var(--codex); --cs: var(--codex-soft); }
+  /* Each account sets --c inline (tint() in the script); its soft shade follows the theme. */
+  [style*="--c"] { --cs: color-mix(in srgb, var(--c) 15%, var(--card)); }
 
-  .layout { display: grid; grid-template-columns: 340px 1fr; gap: 20px; max-width: 1160px; margin: 0 auto; padding: 24px 16px 40px; align-items: start; }
-  aside { position: sticky; top: 16px; display: grid; gap: 14px; }
-  h1 { font-size: 18px; margin: 0; letter-spacing: -0.01em; }
+  h1 { font-size: 16px; margin: 0; letter-spacing: -0.01em; }
+  h2 { font-size: 11px; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); margin: 0 0 10px; font-weight: 600; }
+  h2 small { text-transform: none; letter-spacing: 0; font-weight: 400; color: var(--faint); font-size: 12px; }
   .repo { font-size: 12px; color: var(--muted); }
-  h2 { font-size: 11px; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); margin: 0 0 8px; font-weight: 600; }
   .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; }
   .faint { color: var(--faint); font-size: 12px; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--c); flex: none; }
+  .theme { width: 30px; height: 30px; border-radius: 50%; border: 1px solid var(--line); background: var(--card); color: var(--muted); font-size: 15px; line-height: 1; flex: none; }
+  .theme:hover { color: var(--fg); }
 
-  /* Account cards */
-  .acc { display: block; width: 100%; text-align: left; padding: 11px 13px; margin-bottom: 8px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; transition: border-color .15s, box-shadow .15s; }
-  .acc:hover { border-color: var(--faint); }
-  .acc.lead { border-color: var(--c); box-shadow: 0 0 0 1px var(--c); }
-  .acc .name { display: flex; align-items: center; gap: 7px; }
-  .acc .name b { font-size: 14px; }
-  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--c); flex: none; }
-  .role-tag { margin-left: auto; font-size: 11px; font-weight: 600; padding: 0 8px; border-radius: 99px; }
-  .role-tag.lead { background: var(--c); color: #fff; }
-  .role-tag.ext { background: var(--cs); color: var(--c); }
-  .wins { display: grid; gap: 5px; margin-top: 8px; }
-  .win { display: grid; grid-template-columns: 62px 1fr 34px; gap: 2px 8px; align-items: center; font-size: 12px; }
-  .win .lbl { color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .win .pct { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
-  .bar { height: 6px; background: var(--track); border-radius: 3px; overflow: hidden; }
-  .bar i { display: block; height: 100%; background: var(--c); border-radius: 3px; }
-  .bar i.hot { background: var(--hot); }
-  .win .when { grid-column: 2 / -1; color: var(--faint); font-size: 11px; font-variant-numeric: tabular-nums; min-height: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .win .note { font-size: 11px; }
-  .win .note.hot { color: var(--hot); font-weight: 600; }
+  /* Two panes: what starts on the left, the sessions to pick from on the right; each scrolls on its own. */
+  .split { display: grid; grid-template-columns: 1fr 380px; height: 100%; }
+  .detail { display: flex; flex-direction: column; min-height: 0; }
+  .detail .scroll { flex: 1; overflow: auto; padding: 22px 26px; display: grid; gap: 22px; align-content: start; }
+  .pane { display: flex; flex-direction: column; min-height: 0; border-left: 1px solid var(--line); }
+  .pane .hd { padding: 16px; display: grid; gap: 10px; }
+  .pane .top { display: flex; justify-content: space-between; align-items: start; gap: 10px; }
+  .pane .scroll { flex: 1; overflow: auto; padding: 0 8px 12px; }
+  .bigt { font-size: 20px; font-weight: 650; letter-spacing: -0.01em; margin: 0; line-height: 1.3; }
 
   /* Segmented pickers, used everywhere instead of dropdowns */
   .seg { display: inline-flex; flex-wrap: wrap; gap: 3px; padding: 3px; background: var(--hover); border-radius: 9px; }
   .seg button { border: 0; background: none; padding: 3px 9px; border-radius: 6px; font-size: 13px; color: var(--muted); white-space: nowrap; }
   .seg button:hover { color: var(--fg); }
-  .seg button[aria-pressed="true"] { background: var(--card); color: var(--fg); font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,.12); }
+  .seg button[aria-pressed="true"] { background: var(--c, var(--card)); color: #fff; font-weight: 600; }
   .seg .grp { display: inline-flex; flex-wrap: wrap; gap: 3px; align-items: center; }
   .seg .grp + .grp { margin-left: 4px; padding-left: 7px; border-left: 1px solid var(--line); }
-  .seg .grp button[aria-pressed="true"] { background: var(--c); color: #fff; }
   .seg .who { font-size: 11px; color: var(--c); font-weight: 600; padding: 0 3px 0 4px; }
-  .field { display: grid; gap: 5px; }
-  .field > span { font-size: 12px; color: var(--muted); }
+  .field { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .field > span { font-size: 12px; color: var(--muted); width: 52px; }
 
-  .summary { font-size: 13px; color: var(--muted); }
-  .summary b { color: var(--fg); }
-  #start { width: 100%; border: 0; border-radius: 10px; padding: 11px; font-weight: 700; color: #fff; background: var(--c, var(--fg)); }
-  #status { color: var(--hot); font-size: 12px; }
+  /* Account cards */
+  .accs { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; }
+  .acc { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; width: 100%; text-align: left; padding: 10px 12px; background: var(--card); border: 1px solid var(--line); border-radius: 10px; transition: border-color .15s, box-shadow .15s; }
+  button.acc:hover { border-color: var(--faint); }
+  .acc.lead { border-color: var(--c); box-shadow: 0 0 0 1px var(--c); }
+  .acc .name { display: flex; align-items: center; gap: 7px; }
+  .acc .name b { white-space: nowrap; }
+  .acc .name .faint { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .role-tag { margin-left: auto; font-size: 11px; font-weight: 600; padding: 0 8px; border-radius: 99px; }
+  .role-tag.lead { background: var(--c); color: #fff; }
+  .role-tag.ext { background: var(--cs); color: var(--c); }
+  .wins { display: grid; gap: 5px; }
+  .win { display: grid; grid-template-columns: 22px 1fr 34px; gap: 0 8px; align-items: center; font-size: 12px; }
+  .win .lbl { color: var(--muted); }
+  .win .pct { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
+  .win .pct.hot, .win .note.hot { color: var(--hot); }
+  .bar { height: 6px; background: var(--track); border-radius: 3px; overflow: hidden; }
+  .bar i { display: block; height: 100%; background: var(--c); border-radius: 3px; }
+  .bar i.hot { background: var(--hot); }
+  .win .when { grid-column: 2 / -1; color: var(--faint); font-size: 11px; font-variant-numeric: tabular-nums; min-height: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
-  /* Right column */
-  .main { display: grid; gap: 22px; min-width: 0; }
-  .head { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; min-height: 30px; }
-  .head h2 { margin: 0; }
-  .chips { display: flex; gap: 5px; flex-wrap: wrap; }
-  .chip { font-size: 12px; padding: 2px 10px; border-radius: 99px; border: 1px solid var(--line); background: var(--card); color: var(--muted); }
-  .chip.on { background: var(--fg); color: var(--bg); border-color: var(--fg); }
-  #sessions { max-height: calc(5 * 41px + 2px); overflow-y: auto; }
-  .sess { display: grid; grid-template-columns: 100px 1fr auto; gap: 10px; align-items: center; width: 100%; height: 41px; border: 0; background: none; padding: 0 14px; text-align: left; border-bottom: 1px solid var(--line); }
-  .sess:last-child { border-bottom: 0; }
-  .sess:hover { background: var(--hover); }
-  .sess.picked { background: var(--cs); box-shadow: inset 3px 0 0 var(--c); }
-  .sess .tag { justify-self: start; font-size: 11px; font-weight: 600; padding: 0 8px; border-radius: 99px; background: var(--cs); color: var(--c); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .sess .title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .sess .ago { font-size: 12px; color: var(--faint); white-space: nowrap; }
-  .empty { padding: 12px 14px; color: var(--faint); font-size: 13px; }
-  .update { display: flex; align-items: center; gap: 8px; margin-top: 8px; font-size: 13px; color: var(--muted); }
-
-  #workers.locked .rows, #workers.locked .tools { opacity: .4; pointer-events: none; }
-  .wrow { display: grid; grid-template-columns: 130px 1fr auto; gap: 8px 14px; align-items: center; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+  /* Workers */
+  .wrow { display: grid; grid-template-columns: 120px 1fr auto; gap: 6px 12px; align-items: center; padding: 10px 14px; border-bottom: 1px solid var(--line); }
   .wrow .role { font-weight: 600; }
   .wrow .role input { width: 100%; border: 1px solid var(--line); background: var(--bg); border-radius: 7px; padding: 3px 8px; font-weight: 600; }
   .wrow .role small { display: block; font-weight: 400; color: var(--faint); font-size: 11px; }
@@ -99,53 +94,85 @@
   .wrow .eff { grid-column: 2; justify-self: start; }
   .x { grid-row: 1; grid-column: 3; border: 0; background: none; color: var(--faint); padding: 4px 6px; }
   .x:hover { color: var(--hot); }
-  .tools { display: flex; gap: 10px; align-items: center; padding: 10px 14px; }
-  .add { border: 1px dashed var(--line); background: none; border-radius: 8px; padding: 4px 12px; color: var(--muted); }
-  .hint { font-size: 12px; color: var(--faint); margin: 6px 2px 0; }
+  .tools { display: flex; gap: 10px; align-items: center; justify-content: space-between; flex-wrap: wrap; padding: 10px 14px; }
+  .tools .field > span { width: auto; white-space: nowrap; }
+  .add { border: 1px dashed var(--line); background: none; border-radius: 8px; padding: 3px 12px; color: var(--muted); }
+  .locked { display: flex; gap: 10px; align-items: center; padding: 12px 14px; color: var(--muted); font-size: 13px; }
+  .link { margin-left: auto; border: 0; background: none; color: var(--muted); text-decoration: underline; padding: 0; font-size: 13px; }
+  .hint { font-size: 12px; color: var(--faint); margin: 8px 2px 0; }
+
+  /* Start bar */
+  .go { display: flex; align-items: center; gap: 14px; padding: 14px 26px; border-top: 1px solid var(--line); background: var(--card); }
+  .summary { flex: 1; font-size: 13px; color: var(--muted); }
+  .summary b { color: var(--fg); }
+  .warn { color: var(--hot); font-weight: 600; }
+  #status { color: var(--hot); font-size: 12px; }
+  .kbd { font-size: 11px; color: var(--faint); border: 1px solid var(--line); border-radius: 4px; padding: 0 5px; }
+  #start { border: 0; border-radius: 10px; padding: 10px 24px; font-weight: 700; color: #fff; background: var(--c, var(--fg)); white-space: nowrap; }
+
+  /* Session list */
+  .search { width: 100%; border: 1px solid var(--line); background: var(--card); border-radius: 8px; padding: 6px 10px; font-size: 13px; }
+  .chips { display: flex; gap: 6px; flex-wrap: wrap; }
+  .chips button { display: inline-flex; gap: 6px; align-items: center; border: 1px solid var(--line); background: none; border-radius: 99px; padding: 1px 10px; font-size: 12px; color: var(--muted); }
+  /* Picked: "All" in the theme's own card color, an account in its color like a pressed picker. */
+  .chips button.on { background: var(--card); color: var(--fg); border-color: var(--faint); font-weight: 600; }
+  .chips button.on[style*="--c"] { background: var(--c); border-color: var(--c); color: #fff; }
+  .chips button.on .dot { background: #fff; }
+  .day { font-size: 11px; font-weight: 600; color: var(--faint); text-transform: uppercase; letter-spacing: .06em; padding: 12px 8px 4px; }
+  .item { display: grid; grid-template-columns: 12px 1fr auto; gap: 0 10px; align-items: center; width: 100%; padding: 7px 8px; border: 0; border-radius: 8px; background: none; text-align: left; }
+  .item:hover { background: var(--hover); }
+  .item.on { background: var(--cs); }
+  .item .title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .item.on .title { font-weight: 600; }
+  .item .meta { grid-column: 2 / -1; font-size: 12px; color: var(--faint); }
+  .item .ago { font-size: 12px; color: var(--faint); white-space: nowrap; }
+  .item.new { grid-template-columns: 22px 1fr auto; padding: 9px 8px; }
+  .plus { width: 22px; height: 22px; border-radius: 6px; display: grid; place-items: center; background: var(--c); color: #fff; font-weight: 700; }
+  .empty { padding: 12px 8px; color: var(--faint); font-size: 13px; }
+
+  /* Spotlight: typing anywhere opens it; an account name and ⏎ start a new session there with its saved table. */
+  .spot { position: fixed; inset: 0; z-index: 10; background: color-mix(in srgb, var(--fg) 25%, transparent); display: grid; justify-items: center; align-items: start; padding: 16vh 16px 0; }
+  .spot-box { width: min(520px, 100%); background: var(--card); border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 20px 50px rgba(0,0,0,.25); overflow: hidden; }
+  .spot input { width: 100%; border: 0; background: none; padding: 16px 18px; font-size: 20px; outline: none; }
+  .spot-list { border-top: 1px solid var(--line); padding: 6px; display: grid; gap: 2px; }
+  .spot-item { display: grid; grid-template-columns: 12px auto 1fr auto; gap: 10px; align-items: center; width: 100%; padding: 9px 12px; border: 0; border-radius: 9px; background: none; text-align: left; }
+  .spot-item.on { background: var(--cs); }
+  .spot-item .faint { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .spot-foot { padding: 8px 18px; border-top: 1px solid var(--line); font-size: 12px; color: var(--faint); }
 
   @media (max-width: 760px) {
-    .layout { grid-template-columns: 1fr; }
-    aside { position: static; }
+    html, body { height: auto; }
+    .split { grid-template-columns: 1fr; height: auto; }
+    .pane { border-left: 0; border-top: 1px solid var(--line); order: -1; }
+    .detail .scroll { padding: 18px 16px; }
+    .go { position: sticky; bottom: 0; padding: 12px 16px; }
     .wrow { grid-template-columns: 1fr auto; }
     .wrow .eff, .wrow .runs { grid-column: 1 / -1; }
     .x { grid-column: 2; }
-    .sess { grid-template-columns: 1fr auto; }
-    .sess .tag { display: none; }
   }
 </style>
 </head>
 <body>
-<div class="layout">
-  <aside>
-    <div><h1>Start a session</h1><span class="repo" id="repo"></span></div>
-    <div>
-      <h2>Lead</h2>
-      <div id="accounts"></div>
+<div class="split">
+  <main class="detail">
+    <div class="scroll" id="detail"></div>
+    <div class="go"><span class="summary" id="summary"></span><span id="status"></span><span class="kbd">⏎</span><button id="start">Start</button></div>
+  </main>
+  <aside class="pane">
+    <div class="hd">
+      <div class="top"><div><h1>Start a session</h1><span class="repo" id="repo"></span></div><button class="theme" id="theme" type="button"></button></div>
+      <input class="search" id="q" placeholder="Search sessions" spellcheck="false" aria-label="Search sessions">
+      <div class="chips" id="chips"></div>
+      <span class="faint">Or type an account name anywhere, then ⏎, to start a new session on it.</span>
     </div>
-    <div class="card" style="padding:12px 13px;display:grid;gap:10px">
-      <div class="field"><span>Model</span><div id="leadModel"></div></div>
-      <div class="field"><span>Effort</span><div id="leadEffort"></div></div>
-    </div>
-    <div class="summary" id="summary"></div>
-    <button id="start">Start</button>
-    <span id="status"></span>
+    <div class="scroll" id="list"><div class="empty">Reading…</div></div>
   </aside>
-
-  <div class="main">
-    <section>
-      <div class="head"><h2>Recent sessions here</h2><div class="chips" id="chips"></div></div>
-      <div class="card" id="sessions"><div class="empty">Reading…</div></div>
-      <label class="update" id="updateBox" hidden><input type="checkbox" id="update"> Update the worker table (otherwise it keeps the one it started with)</label>
-    </section>
-
-    <section>
-      <div class="head"><h2>Workers</h2><span id="extBox"></span></div>
-      <div class="card" id="workers">
-        <div class="rows" id="roles"></div>
-        <div class="tools"><button class="add" id="add">+ Add role</button></div>
-      </div>
-      <p class="hint">Native: the session's own subagents. External: one-shot runs on the other CLI that only return a report. A role not listed runs as implementer, which is always native.</p>
-    </section>
+</div>
+<div class="spot" id="spot" hidden>
+  <div class="spot-box">
+    <input id="spotq" spellcheck="false" autocomplete="off" aria-label="Account to start on">
+    <div class="spot-list" id="spotlist"></div>
+    <div class="spot-foot">⏎ new session with the saved workers · esc to close</div>
   </div>
 </div>
 
@@ -154,23 +181,40 @@ const S = __STATE__;
 const $ = id => document.getElementById(id);
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
 const OTHER = {claude: 'codex', codex: 'claude'};
-const short = m => m.replace(/^gpt-[\d.]+-/, '').replace('[1m]', ' 1M');  // gpt-6-luna → luna, opus[1m] → opus 1M
-let prov = null, leadIdx = 0, resume = null, sessions = null, filter = 'all';
-const extIdx = {claude: 0, codex: 0};
+const short = m => m.replace(/^gpt-[\d.]+-/, '').replace('[1m]', ' 1M').replace(/^./, c => c.toUpperCase());  // gpt-6-luna → Luna, opus[1m] → Opus 1M
+// One color per account: Claude subscriptions on the yellow-red range, Codex ones on blues.
+const PALETTE = {claude: ['#d97757', '#c48a06', '#c2410c', '#a16207'], codex: ['#3b82f6', '#6366f1', '#0891b2']};
+const tint = (e, p, i) => { e.style.setProperty('--c', PALETTE[p][i % PALETTE[p].length]); return e; };
+let prov = null, leadIdx = 0, resume = null, update = false, sessions = null, filter = 'all';
 const lead = {model: null, effort: null};
+const quota = {};  // `${p}|${i}` → windows, or {error}, once read
 const ext = () => S.accounts[OTHER[prov]];
-const extName = () => (ext()[extIdx[prov]] || {name: OTHER[prov]}).name;
+const extIndex = () => Math.max(0, ext().findIndex(a => a.folder === table().account));  // the lead account's table names it
+const extName = () => (ext()[extIndex()] || {name: OTHER[prov]}).name;
 const leadName = () => S.accounts[prov][leadIdx].name;
 const accName = (p, i) => (S.accounts[p][i] || {name: p}).name;
 const provOf = runs => runs === 'native' ? prov : OTHER[prov];
-const table = () => S.tables[prov];
+const accOf = runs => runs === 'native' ? leadIdx : extIndex();
+const table = () => S.tables[leadName()];  // one table per lead account: claude and claude-work can route differently
 $('repo').textContent = S.repo;
 
-// A segmented picker: groups of options, one value pressed; a group with cls takes that provider's color.
+// Theme: the system's at open; the toggle overrides it for this window only.
+const systemDark = matchMedia('(prefers-color-scheme: dark)');
+const isDark = () => (document.documentElement.dataset.theme || (systemDark.matches ? 'dark' : 'light')) === 'dark';
+function paintToggle() {
+  $('theme').textContent = isDark() ? '☀' : '☾';
+  $('theme').ariaLabel = isDark() ? 'Light theme' : 'Dark theme';
+}
+$('theme').onclick = () => { document.documentElement.dataset.theme = isDark() ? 'light' : 'dark'; paintToggle(); };
+systemDark.addEventListener('change', paintToggle);
+paintToggle();
+
+// A segmented picker: groups of options, one value pressed; a group with an account takes that account's color.
 function seg(groups, value, onPick) {
   const box = el('div', 'seg');
   for (const g of groups) {
-    const wrap = g.cls ? el('span', 'grp ' + g.cls) : box;
+    const wrap = el('span', 'grp');
+    if (g.acc) tint(wrap, ...g.acc);
     if (g.who) wrap.append(el('span', 'who', g.who));
     for (const o of g.options) {
       const b = el('button', null, o.label ?? o.value);
@@ -179,86 +223,113 @@ function seg(groups, value, onPick) {
       b.onclick = () => onPick(o.value);
       wrap.append(b);
     }
-    if (wrap !== box) box.append(wrap);
+    box.append(wrap);
   }
   return box;
 }
-const opts = list => list.map(v => ({value: v, label: short(v)}));
+const opts = list => list.map(v => ({value: v, label: short(v)}));  // models
+const plain = list => list.map(v => ({value: v}));  // efforts, as they are
+function section(title, note, ...children) {
+  const s = el('section'), h = el('h2', null, title);
+  if (note) h.append(' ', el('small', null, '· ' + note));
+  s.append(h, ...children);
+  return s;
+}
 
-// --- Accounts: quota cards; a click makes one the lead ---
+// --- Quota: read once per account, painted on every card of that account ---
 function left(epoch) {
   let m = Math.max(0, Math.round((epoch * 1000 - Date.now()) / 60000));
   const d = Math.floor(m / 1440), h = Math.floor(m % 1440 / 60); m %= 60;
   return d ? `${d}d ${h}h` : h ? `${h}h ${m}m` : `${m}m`;
 }
 const when = epoch => new Date(epoch * 1000).toLocaleString([], {weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hourCycle: 'h23'});
-const timers = [];
-setInterval(() => timers.forEach(f => f()), 30000);
+const resetText = epoch => `in ${left(epoch)} · ${when(epoch)}`;
+setInterval(() => document.querySelectorAll('[data-reset]').forEach(e => { e.textContent = resetText(+e.dataset.reset); }), 30000);
+const peak = (p, i) => Math.max(0, ...((Array.isArray(quota[`${p}|${i}`]) && quota[`${p}|${i}`]) || []).map(w => w.used));
 
-for (const p of ['claude', 'codex']) S.accounts[p].forEach((a, i) => {
-  const card = el('button', 'acc ' + p);
-  card.type = 'button'; card.dataset.p = p; card.dataset.i = i;
-  card.onclick = () => { resume = null; selectLead(p, i); };
-  const name = el('div', 'name');
-  name.append(el('span', 'dot'), el('b', null, a.name), el('span', 'faint', p === 'codex' ? 'Codex' : 'Claude Code'), el('span', 'role-tag'));
-  // Two fixed rows (5h, 7d) from the start, so the card keeps its size when the quota arrives.
-  const wins = el('div', 'wins'), rows = {};
+// Two fixed rows (5h, 7d) from the start, so the card keeps its size when the quota arrives.
+function wins(p, i) {
+  const q = quota[`${p}|${i}`], box = el('div', 'wins');
+  box.dataset.q = `${p}|${i}`;
+  const read = Array.isArray(q) && q.length ? q : null;
   for (const label of ['5h', '7d']) {
-    const row = el('div', 'win'), bar = el('div', 'bar'), fill = el('i'), pct = el('span', 'pct', '–');
-    fill.style.width = '0';
-    const at = el('div', 'when'), t = el('span', null, 'reading…'), notes = el('span');
+    const w = read && read.find(x => x.label === label);
+    const row = el('div', 'win'), bar = el('div', 'bar'), fill = el('i');
+    fill.style.width = w ? Math.min(100, w.used) + '%' : '0';
+    if (w && w.used >= 90) fill.className = 'hot';
     bar.append(fill);
-    at.append(t, notes);
-    row.append(el('span', 'lbl', label), bar, pct, at);
-    wins.append(row);
-    rows[label] = {fill, pct, t, notes};
+    const at = el('div', 'when');
+    if (w && w.resets) { const t = el('span', null, resetText(w.resets)); t.dataset.reset = w.resets; at.append(t); }
+    else at.textContent = q === undefined ? 'reading…' : read ? '' : 'quota n/a';
+    // A per-model weekly limit (e.g. "7d Fable") goes on the 7d line.
+    if (label === '7d' && read) for (const n of read.filter(x => !['5h', '7d'].includes(x.label))) at.append(el('span', n.used >= 90 ? 'note hot' : 'note', ` · ${n.label.replace(/^7d /, '')} ${Math.round(n.used)}%`));
+    row.append(el('span', 'lbl', label), bar, el('span', 'pct' + (w && w.used >= 90 ? ' hot' : ''), w ? `${Math.round(w.used)}%` : q === undefined ? '–' : 'n/a'), at);
+    box.append(row);
   }
-  card.append(name, wins);
-  $('accounts').append(card);
-  const fail = why => { for (const r of Object.values(rows)) { r.pct.textContent = 'n/a'; r.t.textContent = 'quota n/a'; r.t.title = why || ''; } };
-  fetch(`quota/${p}/${i}`).then(r => r.json()).then(q => {
-    if (q.error || !q.windows.length) return fail(q.error);
-    const notes = [];
-    for (const w of q.windows) {
-      const r = rows[w.label];
-      if (!r) { notes.push(w); continue; }  // a per-model weekly limit (e.g. "7d Fable") goes on the 7d line
-      r.fill.style.width = Math.min(100, w.used) + '%';
-      r.fill.className = w.used >= 90 ? 'hot' : '';
-      r.pct.textContent = `${Math.round(w.used)}%`;
-      const paint = () => { r.t.textContent = w.resets ? `in ${left(w.resets)} · ${when(w.resets)}` : ''; };
-      paint(); timers.push(paint);
-    }
-    for (const n of notes) rows['7d'].notes.append(el('span', n.used >= 90 ? 'note hot' : 'note', ` · ${n.label.replace(/^7d /, '')} ${Math.round(n.used)}%`));
-    for (const r of Object.values(rows)) if (r.pct.textContent === '–') { r.pct.textContent = 'n/a'; r.t.textContent = ''; }
-  }).catch(() => fail());
+  return box;
+}
+for (const p of ['claude', 'codex']) S.accounts[p].forEach((_, i) => {
+  const done = q => { quota[`${p}|${i}`] = q; document.querySelectorAll(`[data-q="${p}|${i}"]`).forEach(b => b.replaceWith(wins(p, i))); summary(); };
+  fetch(`quota/${p}/${i}`).then(r => r.json()).then(q => done(q.error ? {error: q.error} : q.windows)).catch(() => done({error: ''}));
 });
-function markCards() {
-  document.querySelectorAll('.acc').forEach(c => {
-    const p = c.dataset.p, i = +c.dataset.i, tag = c.querySelector('.role-tag');
-    const isLead = p === prov && i === leadIdx, isExt = p !== prov && i === extIdx[prov];
-    c.classList.toggle('lead', isLead);
-    c.setAttribute('aria-pressed', isLead);
-    tag.className = 'role-tag' + (isLead ? ' lead' : isExt ? ' ext' : '');
-    tag.textContent = isLead ? 'lead' : isExt ? 'external' : '';
-  });
-  $('start').className = prov;
+
+// An account card: a button that makes it the lead for a new session, or a plain card when it can't change.
+function card(p, i, pick) {
+  const c = tint(el(pick ? 'button' : 'div', 'acc'), p, i);
+  const isLead = p === prov && i === leadIdx, isExt = p !== prov && i === extIndex();
+  c.classList.toggle('lead', isLead);
+  if (pick) { c.type = 'button'; c.setAttribute('aria-pressed', isLead); c.onclick = () => selectLead(p, i); }
+  const name = el('div', 'name');
+  name.append(el('span', 'dot'), el('b', null, S.accounts[p][i].name), el('span', 'faint', p === 'codex' ? 'Codex' : 'Claude Code'),
+    el('span', 'role-tag' + (isLead ? ' lead' : isExt ? ' ext' : ''), isLead ? 'lead' : isExt ? 'external' : ''));
+  c.append(name, wins(p, i));
+  return c;
 }
 
-// --- Lead model and effort ---
-function renderLead() {
+// --- Left pane: what starts ---
+function renderDetail() {
+  const box = $('detail');
+  box.replaceChildren();
+  if (resume) {
+    const head = el('div');
+    head.append(el('p', 'bigt', resume.title), el('span', 'faint', `last active ${ago(resume.time)}`));
+    const runs = card(prov, leadIdx, false);
+    runs.style.maxWidth = '440px';
+    box.append(head, section('Runs on', null, runs), section('Workers', update ? `saved for ${leadName()} in this repo` : null, update ? workers() : locked()));
+  } else {
+    const accs = el('div', 'accs');
+    for (const p of ['claude', 'codex']) S.accounts[p].forEach((_, i) => accs.append(card(p, i, true)));
+    const model = el('div');
+    model.style.cssText = 'display:grid;gap:8px';
+    const models = Object.keys(S.leads[prov]), efforts = S.leads[prov][lead.model];
+    const row = (label, picker) => { const f = el('div', 'field'); f.append(el('span', null, label), picker); return f; };
+    model.append(
+      row('Model', seg([{acc: [prov, leadIdx], options: opts(models)}], lead.model, m => { lead.model = m; fixLead(); renderDetail(); })),
+      row('Effort', seg([{acc: [prov, leadIdx], options: plain(efforts)}], lead.effort, e => { lead.effort = e; renderDetail(); })));
+    box.append(el('p', 'bigt', 'New session'), section('Lead account', null, accs), section('Lead model', null, model),
+      section('Workers', `saved for ${leadName()} in this repo`, workers()));
+  }
+  tint($('start'), prov, leadIdx);
+  $('start').textContent = resume ? 'Resume' : 'Start';
+  summary();
+}
+function locked() {
+  const box = el('div', 'card locked'), change = el('button', 'link', 'Change for this resume');
+  change.type = 'button';
+  change.onclick = () => { update = true; renderDetail(); };
+  box.append('Same workers as when this session started', change);
+  return box;
+}
+function fixLead() {
   const models = Object.keys(S.leads[prov]);
   if (!models.includes(lead.model)) lead.model = S.leadDefault[prov].model;
   const efforts = S.leads[prov][lead.model];
   if (!efforts.includes(lead.effort)) lead.effort = efforts.includes(S.leadDefault[prov].effort) ? S.leadDefault[prov].effort : 'medium';
-  $('leadModel').replaceChildren(seg([{cls: prov, options: opts(models)}], lead.model, m => { lead.model = m; renderLead(); }));
-  $('leadEffort').replaceChildren(seg([{cls: prov, options: opts(efforts)}], lead.effort, e => { lead.effort = e; renderLead(); }));
-  summary();
 }
 
-// --- Workers: rows built from S.tables[prov]; pickers edit it in place ---
-function renderWorkers() {
-  const box = $('roles');
-  box.replaceChildren();
+// --- Workers: rows built from the lead account's table; pickers edit it in place ---
+function workers() {
+  const box = el('div'), rows = el('div', 'card');
   for (const r of table().roles) {
     const row = el('div', 'wrow');
     const role = el('div', 'role');
@@ -270,65 +341,79 @@ function renderWorkers() {
       name.oninput = () => { r.role = name.value.trim().toLowerCase(); };
       role.append(name);
     }
-    const groups = [{who: leadName(), cls: prov, options: opts(Object.keys(S.models[prov])).map(o => ({...o, value: 'native|' + o.value}))}];
-    if (r.role !== 'implementer') groups.push({who: extName(), cls: OTHER[prov], options: opts(Object.keys(S.models[OTHER[prov]])).map(o => ({...o, value: 'external|' + o.value}))});
+    const groups = [{who: leadName(), acc: [prov, leadIdx], options: opts(Object.keys(S.models[prov])).map(o => ({...o, value: 'native|' + o.value}))}];
+    if (r.role !== 'implementer') groups.push({who: extName(), acc: [OTHER[prov], extIndex()], options: opts(Object.keys(S.models[OTHER[prov]])).map(o => ({...o, value: 'external|' + o.value}))});
     const pick = v => {
       [r.runs, r.model] = v.split('|');
       if (!S.models[provOf(r.runs)][r.model].includes(r.effort)) r.effort = 'medium';
-      renderWorkers();
+      renderDetail();
     };
     const runs = el('div', 'runs');
     for (const g of groups) runs.append(seg([g], `${r.runs}|${r.model}`, pick));
-    const eff = seg([{cls: provOf(r.runs), options: opts(S.models[provOf(r.runs)][r.model])}], r.effort, e => { r.effort = e; renderWorkers(); });
+    const eff = seg([{acc: [provOf(r.runs), accOf(r.runs)], options: plain(S.models[provOf(r.runs)][r.model])}], r.effort, e => { r.effort = e; renderDetail(); });
     eff.classList.add('eff');
     row.append(role, runs);
     if (r.role !== 'implementer') {
       const x = el('button', 'x', '✕');
-      x.title = 'Remove role'; x.setAttribute('aria-label', 'Remove role');
-      x.onclick = () => { table().roles.splice(table().roles.indexOf(r), 1); renderWorkers(); };
+      x.type = 'button'; x.setAttribute('aria-label', 'Remove role');
+      x.onclick = () => { table().roles.splice(table().roles.indexOf(r), 1); renderDetail(); };
       row.append(x);
     }
     row.append(eff);
-    box.append(row);
+    rows.append(row);
   }
+  const tools = el('div', 'tools'), add = el('button', 'add', '+ Add role');
+  add.type = 'button';
+  add.onclick = () => {
+    table().roles.push({role: '', runs: 'external', model: S.defaultModel[OTHER[prov]], effort: 'medium'});
+    renderDetail();
+    [...$('detail').querySelectorAll('.wrow input')].pop().focus();
+  };
+  tools.append(add);
   // External account: a picker only when the other CLI has more than one subscription.
-  $('extBox').replaceChildren(ext().length > 1
-    ? seg([{who: 'external', cls: OTHER[prov], options: ext().map((a, i) => ({value: i, label: a.name}))}], extIdx[prov], i => { extIdx[prov] = i; renderWorkers(); summary(); })
-    : '');
-  markCards();
+  if (ext().length > 1) {
+    const f = el('div', 'field');
+    f.append(el('span', 'faint', 'external on'), seg(ext().map((a, i) => ({acc: [OTHER[prov], i], options: [{value: i, label: a.name}]})), extIndex(),
+      i => { table().account = ext()[i].folder; renderDetail(); }));
+    tools.append(f);
+  }
+  rows.append(tools);
+  box.append(rows, el('p', 'hint', 'Native: the session\'s own subagents. External: one-shot runs on the other CLI that only return a report. A role not listed runs as implementer, which is always native.'));
+  return box;
 }
-$('add').onclick = () => {
-  table().roles.push({role: '', runs: 'external', model: S.defaultModel[OTHER[prov]], effort: 'medium'});
-  renderWorkers();
-  [...$('roles').querySelectorAll('input')].pop().focus();
-};
 
-// Each CLI keeps its own table: picking an account of the other CLI shows that one.
-function selectLead(p, i) {
+// Each lead account keeps its own table: picking another account shows that one.
+function selectLead(p, i, session = null) {
+  resume = session;
+  update = false;
   leadIdx = i;  // before rendering: the rows' labels read the lead's name
   if (p !== prov) {
     prov = p;
-    extIdx[p] = Math.max(0, ext().findIndex(a => a.folder === table().account));
-    const last = S.lead.provider === p ? S.lead : S.leadDefault[p];  // an invalid saved value falls back in renderLead
+    const last = S.lead.provider === p ? S.lead : S.leadDefault[p];  // an invalid saved value falls back in fixLead
     Object.assign(lead, {model: last.model, effort: last.effort});
   }
-  renderWorkers();
-  renderLead();
-  renderSessions();
+  fixLead();
+  renderDetail();
+  renderList();
 }
 
-// --- Recent sessions: one merged list, 5 in view, scrollable; a click selects one to resume ---
-fetch('sessions').then(r => r.json()).then(list => { sessions = list; renderChips(); renderSessions(); })
-  .catch(() => { sessions = []; renderSessions(); $('sessions').firstChild.textContent = 'Could not read the sessions.'; });
+// --- Right pane: new session, then recent sessions by day; search and account chips filter them ---
+fetch('sessions').then(r => r.json()).then(list => { sessions = list; renderChips(); renderList(); })
+  .catch(() => { sessions = []; renderList(); $('list').lastChild.textContent = 'Could not read the sessions.'; });
 const key = x => `${x.provider}|${x.account}`;
+$('q').oninput = renderList;
 function renderChips() {
-  const keys = [...new Set(sessions.map(key))];
+  // Same order as the Lead account cards: Claude accounts, then Codex ones, each as listed.
+  const keys = ['claude', 'codex'].flatMap(p => S.accounts[p].map((_, i) => `${p}|${i}`)).filter(k => sessions.some(x => key(x) === k));
   $('chips').replaceChildren();
   if (keys.length < 2) return;
   for (const k of ['all', ...keys]) {
     const [p, i] = k.split('|');
-    const c = el('button', 'chip' + (filter === k ? ' on' : ''), k === 'all' ? 'All' : accName(p, +i));
-    c.onclick = () => { filter = k; renderChips(); renderSessions(); };
+    const c = el('button', filter === k ? 'on' : '');
+    c.type = 'button';
+    if (k === 'all') c.textContent = 'All';
+    else { tint(c, p, +i); c.append(el('span', 'dot'), accName(p, +i)); }
+    c.onclick = () => { filter = k; renderChips(); renderList(); };
     $('chips').append(c);
   }
 }
@@ -336,54 +421,122 @@ function ago(epoch) {
   const m = Math.round((Date.now() - epoch * 1000) / 60000);
   return m < 60 ? `${Math.max(1, m)}m ago` : m < 1440 ? `${Math.round(m / 60)}h ago` : `${Math.round(m / 1440)}d ago`;
 }
-function renderSessions() {
-  const box = $('sessions');
-  if (sessions === null) return lockWorkers();  // still reading: keep "Reading…"
+function day(epoch) {
+  const start = d => new Date(d).setHours(0, 0, 0, 0);
+  const n = Math.round((start(Date.now()) - start(epoch * 1000)) / 864e5);
+  return n <= 0 ? 'Today' : n === 1 ? 'Yesterday' : n < 7 ? 'This week' : 'Older';
+}
+const shown = () => (sessions || []).filter(x => (filter === 'all' || key(x) === filter) && x.title.toLowerCase().includes($('q').value.trim().toLowerCase()));
+function renderList() {
+  const box = $('list');
   box.replaceChildren();
-  const shown = sessions.filter(x => filter === 'all' || key(x) === filter);
-  if (!shown.length) box.append(el('div', 'empty', sessions.length ? 'No sessions for this account.' : 'No sessions started in this folder yet.'));
-  for (const x of shown) {
-    const row = el('button', `sess ${x.provider}` + (resume && resume.id === x.id ? ' picked' : ''));
-    row.append(el('span', 'tag', accName(x.provider, x.account)), el('span', 'title', x.title), el('span', 'ago', ago(x.time)));
-    row.title = resume && resume.id === x.id ? 'Click again for a new session' : 'Resume this session';
-    row.onclick = () => {
-      resume = resume && resume.id === x.id ? null : x;
-      if (resume) { $('update').checked = false; selectLead(x.provider, x.account); } else renderSessions();
-    };
+  const nw = tint(el('button', 'item new' + (resume ? '' : ' on')), prov, leadIdx);
+  nw.type = 'button';
+  nw.append(el('span', 'plus', '+'), el('span', 'title', 'New session'), el('span', 'ago', `on ${leadName()}`));
+  nw.onclick = () => selectLead(prov, leadIdx);
+  box.append(nw);
+  if (sessions === null) return box.append(el('div', 'empty', 'Reading…'));
+  const list = shown();
+  if (!list.length) box.append(el('div', 'empty', !sessions.length ? 'No sessions started in this folder yet.' : $('q').value ? 'No sessions match.' : 'No sessions for this account.'));
+  let last = null;
+  for (const x of list) {
+    if (day(x.time) !== last) box.append(el('div', 'day', last = day(x.time)));
+    const row = tint(el('button', 'item' + (resume && resume.id === x.id ? ' on' : '')), x.provider, x.account);
+    row.type = 'button';
+    const meta = el('span', 'meta', accName(x.provider, x.account));
+    if (peak(x.provider, x.account) >= 90) meta.append(' · ', el('span', 'warn', 'near limit'));
+    row.append(el('span', 'dot'), el('span', 'title', x.title), el('span', 'ago', ago(x.time)), meta);
+    row.onclick = () => selectLead(x.provider, x.account, x);
     box.append(row);
   }
-  $('updateBox').hidden = !resume;
-  lockWorkers();
+  box.querySelector('.on')?.scrollIntoView({block: 'nearest'});
 }
-$('update').onchange = lockWorkers;
-function lockWorkers() {
-  $('workers').classList.toggle('locked', !!resume && !$('update').checked);
-  summary();
+
+// ↑ ↓ walk New session and the listed sessions, even while typing in the search; ⏎ starts.
+addEventListener('keydown', e => {
+  if (e.target.matches('.wrow input')) return;
+  // A letter typed outside the inputs opens the spotlight with it.
+  if (e.key.length === 1 && e.key !== ' ' && !e.metaKey && !e.ctrlKey && !e.altKey && !e.target.matches('input')) { e.preventDefault(); return openSpot(e.key); }
+  if (e.key === 'Enter') { e.preventDefault(); return $('start').click(); }
+  if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+  e.preventDefault();
+  const order = [null, ...shown()], k = Math.max(0, order.findIndex(x => x && resume && x.id === resume.id));
+  const next = order[Math.max(0, Math.min(order.length - 1, k + (e.key === 'ArrowDown' ? 1 : -1)))];
+  next ? selectLead(next.provider, next.account, next) : selectLead(prov, leadIdx);
+});
+
+// --- Spotlight: an account by name, then ⏎ starts a new session on it with the model and table saved for it ---
+let spotIdx = 0;
+function spotMatches() {
+  const q = $('spotq').value.trim().toLowerCase(), found = [];
+  for (const p of ['claude', 'codex']) S.accounts[p].forEach((a, i) => {
+    const n = a.name.toLowerCase();
+    const rank = n === q ? 0 : n.startsWith(q) ? 1 : n.includes(q) ? 2 : p.startsWith(q) ? 3 : -1;  // "work" finds claude-work
+    if (rank >= 0) found.push({p, i, rank});
+  });
+  return found.sort((a, b) => a.rank - b.rank);
 }
+function renderSpot() {
+  const list = spotMatches(), box = $('spotlist');
+  spotIdx = Math.min(spotIdx, Math.max(0, list.length - 1));
+  box.replaceChildren();
+  if (!list.length) box.append(el('div', 'empty', 'No account matches.'));
+  list.forEach((m, k) => {
+    const b = tint(el('button', 'spot-item' + (k === spotIdx ? ' on' : '')), m.p, m.i);
+    b.type = 'button';
+    const top = peak(m.p, m.i);
+    b.append(el('span', 'dot'), el('b', null, S.accounts[m.p][m.i].name), el('span', 'faint', m.p === 'codex' ? 'Codex' : 'Claude Code'),
+      top >= 90 ? el('span', 'warn', `${Math.round(top)}% used`) : el('span', 'faint', 'new session'));
+    b.onclick = () => launch(m);
+    box.append(b);
+  });
+}
+function openSpot(text) {
+  $('spot').hidden = false;
+  $('spotq').value = text;
+  $('spotq').focus();
+  spotIdx = 0;
+  renderSpot();
+}
+const closeSpot = () => { $('spot').hidden = true; $('spotq').blur(); };
+function launch(m) {
+  closeSpot();
+  selectLead(m.p, m.i);
+  $('start').click();
+}
+$('spotq').oninput = () => { spotIdx = 0; $('spotq').value ? renderSpot() : closeSpot(); };
+$('spotq').onkeydown = e => {
+  e.stopPropagation();  // the page's own keys (⏎ starts the selection, ↑ ↓ walk the list) stay out
+  const list = spotMatches();
+  if (e.key === 'Escape') closeSpot();
+  else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); spotIdx = Math.max(0, Math.min(list.length - 1, spotIdx + (e.key === 'ArrowDown' ? 1 : -1))); renderSpot(); }
+  else if (e.key === 'Enter' && list.length) { e.preventDefault(); launch(list[spotIdx]); }
+};
+$('spot').onclick = e => { if (e.target === $('spot')) closeSpot(); };
 
 function summary() {
   if (!prov) return;
   const s = $('summary');
   s.replaceChildren();
-  const extra = `${short(lead.model)} · ${lead.effort}`;
-  if (resume) s.append('Resume ', el('b', null, resume.title), ` on ${leadName()} · `, $('update').checked ? 'new workers' : 'same workers');
-  else s.append('New session on ', el('b', null, leadName()), ` · ${extra} · external on ${extName()}`);
+  if (resume) s.append('Resume on ', el('b', null, leadName()), ` · ${update ? 'new workers' : 'same workers'}`);
+  else s.append('New on ', el('b', null, leadName()), ` · ${short(lead.model)} · ${lead.effort} · external on ${extName()}`);
+  const top = peak(prov, leadIdx);
+  if (top >= 90) s.append(' · ', el('span', 'warn', `${leadName()} is at ${Math.round(top)}% of a limit`));
 }
 
-// Start from the last choice made in this repo.
-const startP = S.lead.provider && S.accounts[S.lead.provider] ? S.lead.provider : 'claude';
-selectLead(startP, Math.max(0, S.accounts[startP].findIndex(a => a.folder === (S.lead.folder ?? null))));
+// Always open on the claude account; its model and effort are the last ones picked for Claude in this repo.
+selectLead('claude', Math.max(0, S.accounts.claude.findIndex(a => a.name === 'claude')));
 
 $('start').onclick = async () => {
   const body = {
-    lead: {provider: prov, account: leadIdx, model: lead.model, effort: lead.effort, resume: resume && resume.id, update: $('update').checked},
+    lead: {provider: prov, account: leadIdx, model: lead.model, effort: lead.effort, resume: resume && resume.id, update},
     roles: table().roles.filter(r => r.role),
-    account: (ext()[extIdx[prov]] || {}).folder ?? null,
+    account: (ext()[extIndex()] || {}).folder ?? null,
   };
   const res = await fetch('confirm', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)});
   if (res.ok) {
-    const done = el('div', 'layout');
-    done.style.display = 'block';
+    const done = el('div');
+    done.style.padding = '24px 26px';
     done.append(el('h1', null, resume ? `Resuming on ${leadName()}` : `Starting ${leadName()}`), el('p', 'faint', 'Back to the terminal. You can close this tab.'));
     document.body.replaceChildren(done);
     window.close();  // works for a tab with one history entry, as the launcher opens it; otherwise the message stays

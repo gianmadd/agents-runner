@@ -45,9 +45,9 @@ DEFAULT_DIR = {"claude": "~/.claude", "codex": "~/.codex"}
 DEFAULT_TABLE = {
     "roles": [
         {"role": "implementer", "runs": "native", "effort": "medium"},
-        {"role": "reviewer", "runs": "external", "effort": "medium"},
-        {"role": "prover", "runs": "external", "effort": "medium"},
-        {"role": "explorer", "runs": "external", "effort": "low"},
+        {"role": "reviewer", "runs": "native", "effort": "medium"},
+        {"role": "prover", "runs": "native", "effort": "medium"},
+        {"role": "explorer", "runs": "native", "effort": "low"},
     ],
     "account": None,
 }
@@ -296,8 +296,8 @@ def load_saved(path):
 
 
 def load_table(saved, provider):
-    """The provider's last confirmed table, else the default; rows without a model get the default model."""
-    table = saved.get(provider) or json.loads(json.dumps(DEFAULT_TABLE))
+    """A lead account's last confirmed table, else the default (every worker native); rows without a model get the default."""
+    table = saved or json.loads(json.dumps(DEFAULT_TABLE))
     for row in table.get("roles", []):
         row.setdefault("model", DEFAULT_MODEL[provider if row.get("runs") == "native" else OTHER[provider]])
     return table
@@ -400,10 +400,15 @@ def pick(saved):
     token = secrets.token_urlsafe(16)
     all_accounts = {p: accounts(p) for p in ("claude", "codex")}
     state = {"repo": os.path.basename(os.getcwd()), "models": MODELS, "defaultModel": DEFAULT_MODEL, "leads": LEADS, "leadDefault": LEAD_DEFAULT, "accounts": all_accounts,
-             "tables": {p: load_table(saved, p) for p in ("claude", "codex")}, "lead": saved.get("lead") or {}}
-    for p, t in state["tables"].items():
-        if p not in saved:
-            t["account"] = next((a["folder"] for a in all_accounts[OTHER[p]] if a["name"] == DEFAULT_EXTERNAL.get(OTHER[p])), t["account"])
+             "tables": {}, "lead": saved.get("lead") or {}}
+    # One table per lead account (by alias name): claude and claude-work can route differently.
+    for p in ("claude", "codex"):
+        for a in all_accounts[p]:
+            mine = (saved.get("tables") or {}).get(a["name"])
+            t = load_table(mine, p)
+            if not mine:
+                t["account"] = next((x["folder"] for x in all_accounts[OTHER[p]] if x["name"] == DEFAULT_EXTERNAL.get(OTHER[p])), t["account"])
+            state["tables"][a["name"]] = t
     chosen = {}
     sessions = []
     reader = threading.Thread(target=lambda: sessions.extend(recent_sessions(all_accounts, os.getcwd())))
@@ -510,7 +515,8 @@ def main():
     if path:
         last = {k: lead[k] for k in ("provider", "folder", "model", "effort")}
         with open(path, "w") as f:
-            json.dump({**saved, "lead": last, **({lead["provider"]: table} if lead["update"] else {})}, f, indent=2)
+            tables = {**(saved.get("tables") or {}), **({names["native"]: table} if lead["update"] else {})}
+            json.dump({"lead": last, "tables": tables}, f, indent=2)
     os.environ.pop(ENV[lead["provider"]], None)  # the default account needs the env var unset
     if lead["folder"]:
         os.environ[ENV[lead["provider"]]] = expand(lead["folder"])

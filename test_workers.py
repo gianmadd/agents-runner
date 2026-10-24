@@ -76,9 +76,13 @@ class Table(unittest.TestCase):
         self.assertNotIn("CODEX_HOME", text)
 
     def test_old_saved_rows_get_the_default_model(self):
-        t = workers.load_table({"codex": {"roles": [{"role": "reviewer", "runs": "external", "effort": "high"}]}}, "codex")
+        t = workers.load_table({"roles": [{"role": "reviewer", "runs": "external", "effort": "high"}]}, "codex")
         self.assertEqual(t["roles"][0]["model"], "sonnet")
-        self.assertEqual(workers.load_table({}, "claude")["roles"][0]["model"], "sonnet")
+        self.assertEqual(workers.load_table(None, "claude")["roles"][0]["model"], "sonnet")
+
+    def test_default_table_is_all_native(self):
+        roles = workers.load_table(None, "codex")["roles"]
+        self.assertEqual([(r["runs"], r["model"]) for r in roles], [("native", "gpt-6-luna")] * 4)
 
     def test_instructions_from_codex_name_the_claude_account(self):
         text = workers.instructions("codex", {"roles": DEFAULT_ROLES, "account": "~/.claude-work"}, {"native": "codex", "external": "claude-work"})
@@ -127,9 +131,22 @@ class Lead(unittest.TestCase):
         self.assertEqual(workers.launch_argv({"provider": "codex", "model": "gpt-6.1-sol", "effort": "high", "update": True}, "T"),
                          ["codex", "-m", "gpt-6.1-sol", "-c", "model_reasoning_effort=high", "-c", 'developer_instructions="T"'])
 
-DEFAULT_ROLES = workers.load_table({}, "codex")["roles"]
+DEFAULT_ROLES = workers.load_table(None, "codex")["roles"]
 ACCOUNTS = [{"folder": None, "name": "claude"}, {"folder": "~/.claude-work", "name": "claude-work"}]
 ROME = zoneinfo.ZoneInfo("Europe/Rome")
+class Sessions(unittest.TestCase):
+    def test_codex_skips_unreadable_rollouts(self):
+        with tempfile.TemporaryDirectory() as home:
+            day = os.path.join(home, "sessions", "2026", "10", "24")
+            os.makedirs(day)
+            meta = {"payload": {"id": "a1", "cwd": "/repo", "source": "cli"}}
+            with open(os.path.join(day, "rollout-1.jsonl"), "w") as f:
+                f.write(json.dumps(meta) + "\n" + json.dumps({"payload": {"type": "user_message", "message": "hello"}}) + "\n")
+            with open(os.path.join(day, "rollout-2.jsonl.zst"), "wb") as f:
+                f.write(b"not zstd")
+            self.assertEqual([s["id"] for s in workers.codex_sessions(home, "/repo", 10)], ["a1"])
+
+
 IMPL = {"role": "implementer", "runs": "native", "model": "sonnet", "effort": "medium"}
 IMPL_CODEX = {"role": "implementer", "runs": "native", "model": "gpt-6-luna", "effort": "medium"}
 
