@@ -17,6 +17,11 @@ import time
 import datetime
 import zoneinfo
 import webbrowser
+try:
+    from compression import zstd  # Python 3.14+: Codex compresses older rollouts to .jsonl.zst
+except ImportError:
+    zstd = None
+ZSTD_ERROR = (zstd.ZstdError,) if zstd else ()
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 _E5 = ["low", "medium", "high", "xhigh", "max"]
@@ -239,19 +244,22 @@ def codex_sessions(folder, cwd, limit):
     for root, dirs, files in os.walk(os.path.join(home, "sessions"), topdown=True):
         dirs.sort(reverse=True)  # YYYY/MM/DD: newest first
         for name in sorted(files, reverse=True):
-            if not name.startswith("rollout-"):
+            if not name.startswith("rollout-") or (name.endswith(".zst") and not zstd):
                 continue
             path = os.path.join(root, name)
-            with open(path, errors="replace") as f:
-                meta = json.loads(f.readline() or "{}").get("payload", {})
-                # Subagents carry a dict as source, headless runs "exec": only sessions you typed in.
-                if meta.get("cwd") != cwd or meta.get("source") not in ("cli", "vscode"):
-                    continue
-                first = None
-                for line in f:
-                    if '"user_message"' in line:
-                        first = " ".join(first_text(json.loads(line)["payload"].get("message", "")))[:100]
-                        break
+            try:
+                with (zstd.open(path, "rt", errors="replace") if name.endswith(".zst") else open(path, errors="replace")) as f:
+                    meta = json.loads(f.readline() or "{}").get("payload", {})
+                    # Subagents carry a dict as source, headless runs "exec": only sessions you typed in.
+                    if meta.get("cwd") != cwd or meta.get("source") not in ("cli", "vscode"):
+                        continue
+                    first = None
+                    for line in f:
+                        if '"user_message"' in line:
+                            first = " ".join(first_text(json.loads(line)["payload"].get("message", "")))[:100]
+                            break
+            except (OSError, ValueError, KeyError, *ZSTD_ERROR):
+                continue  # one unreadable rollout must not hide the others
             found.append({"id": meta["id"], "title": names.get(meta["id"]) or first or "(no title)", "time": os.path.getmtime(path)})
             if len(found) == limit:
                 return found
