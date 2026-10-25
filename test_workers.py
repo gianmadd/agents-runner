@@ -1,4 +1,4 @@
-"""python3 -m unittest discover -s skills/agents-setup/workers"""
+"""python3 -m unittest"""
 import datetime
 import json
 import os

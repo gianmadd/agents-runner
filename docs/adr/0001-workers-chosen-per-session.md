@@ -1,0 +1,21 @@
+# Workers are routed per session, through the `fns` launcher
+
+Agents Hub was retired (gianmadd/agents-hub ADR 0009) and its routing moved here (first into gianmadd/agents-repo-setup, then into a repo of its own: it runs every session in every repo, while the setup runs once per repo): when a skill spawns a worker, it runs either as a native subagent or as a headless run on another subscription. The user decides who does what at each launch, from each subscription's remaining quota, so the Worker table cannot live in the Repo instructions: it is chosen when the session starts and injected into that session only (`--append-system-prompt` for Claude, `-c developer_instructions` for Codex). `fns` opens a local page with the quotas, a choice of which CLI and account to start (with its model and effort, preselected to opus / medium for Claude and sol / medium for Codex) and the table, then starts it in the current folder. A first version wrapped `claude` and `codex` to catch a `--workers` flag; one command of its own leaves the CLIs untouched. A role is **native** (the session's own provider and account) or **external** (the other provider), with its model and effort, so one table shape serves both; `implementer` is always native, since the orchestrator works with it and unlisted roles fall back to it. External workers are one-shot, prompt in and report out, with no resume, and are meant for the roles that only return a report; that is also why bypassing their permissions is acceptable.
+
+This brings back, in a reduced form, the Hub's original purpose: one place to start sessions and pick which subscription does what. That is acceptable this time because what is left is only that choice. There is no app, no per-prompt router and no surfaces to watch, only shell functions and a page that lives until you confirm it.
+
+## Considered options
+
+- **The table in `AGENTS.local.md`, per repo**: rejected. Quotas belong to the subscription and change during the day, so the user would edit every repo.
+- **One global table file**: rejected. Two sessions in two repos could not run different tables at once.
+- **A picker in the terminal instead of a page**: simpler, but the user preferred a page. A `file://` page cannot send the choice back, so the page is served by a one-shot Python stdlib server.
+- **Where the page shows**: a browser tab could not close itself after Start, and Chromium's app mode needs a Chromium browser. The page shows in a minimal native window (`window.swift`, a WKWebView and nothing else), compiled with `swiftc` on first use into `~/.cache/fns/`; without `swiftc` it falls back to the default browser. A full Swift app was rejected: it would bring back the Hub's maintenance for a UI that already exists.
+- **Resuming external workers**: dropped. `implement-loop` re-spawns a reviewer instead of following up, so the contract stays prompt in, report out.
+- **agy as a provider or with its own table**: dropped from the project.
+
+## Consequences
+
+- The repo's `AGENTS.md` doesn't change. Its subagent models (from agents-repo-setup) still apply when a session starts without `fns`; the setup only asks whether to install the launcher.
+- Claude records the system prompt on the first request and reuses it on resume (`--system-prompt-snapshot`), so a resumed conversation keeps the table it started with. The page also lists the folder's recent sessions of every account to resume one; with "Update the worker table", Claude gets `--system-prompt-snapshot off` with the new table for that launch only (a later plain resume brings back the recorded one), and Codex, which keeps its first instructions on resume, gets the table as the first message.
+- Claude's quota is read from the text of `claude -p /usage`, which is undocumented and may change with the CLI. Codex's comes from `codex app-server`, documented but marked experimental.
+- The last confirmed choice is saved per repo in `.git/agents-workers.json`: the CLI started and one table per lead account (claude and claude-work can route differently), shared by the repo's worktrees and never committed. Until one is saved, every worker runs native; moving a role to the other CLI is a choice made on the page.
