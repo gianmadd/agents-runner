@@ -340,7 +340,7 @@ function workers() {
       role.append(name);
     }
     const groups = [{who: leadName(), acc: [prov, leadIdx], options: opts(Object.keys(S.models[prov])).map(o => ({...o, value: 'native|' + o.value}))}];
-    if (r.role !== 'implementer') groups.push({who: extName(), acc: [OTHER[prov], extIndex()], options: opts(Object.keys(S.models[OTHER[prov]])).map(o => ({...o, value: 'external|' + o.value}))});
+    if (r.role !== 'implementer' && ext().length) groups.push({who: extName(), acc: [OTHER[prov], extIndex()], options: opts(Object.keys(S.models[OTHER[prov]])).map(o => ({...o, value: 'external|' + o.value}))});
     const pick = v => {
       [r.runs, r.model] = v.split('|');
       if (!S.models[provOf(r.runs)][r.model].includes(r.effort)) r.effort = 'medium';
@@ -363,7 +363,8 @@ function workers() {
   const tools = el('div', 'tools'), add = el('button', 'add', '+ Add role');
   add.type = 'button';
   add.onclick = () => {
-    table().roles.push({role: '', runs: 'external', model: S.defaultModel[OTHER[prov]], effort: 'medium'});
+    table().roles.push(ext().length ? {role: '', runs: 'external', model: S.defaultModel[OTHER[prov]], effort: 'medium'}
+                                    : {role: '', runs: 'native', model: S.defaultModel[prov], effort: 'medium'});
     renderDetail();
     [...$('detail').querySelectorAll('.wrow input')].pop().focus();
   };
@@ -511,8 +512,9 @@ $('spotq').onkeydown = e => {
 };
 $('spot').onclick = e => { if (e.target === $('spot')) closeSpot(); };
 
-// Always open on the claude account; its model and effort are the last ones picked for Claude in this repo.
-selectLead('claude', Math.max(0, S.accounts.claude.findIndex(a => a.name === 'claude')));
+// Open on the claude account (or the first codex one, with no Claude login); its model and effort are the last ones picked for that CLI in this repo.
+if (S.accounts.claude.length) selectLead('claude', Math.max(0, S.accounts.claude.findIndex(a => a.name === 'claude')));
+else selectLead('codex', 0);
 
 $('start').onclick = async () => {
   const body = {

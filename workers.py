@@ -303,6 +303,15 @@ def load_table(saved, provider):
     return table
 
 
+def native_only(table, provider):
+    """The other CLI has no account: its rows run native, on the default model, keeping the effort when it exists there."""
+    model = DEFAULT_MODEL[provider]
+    for row in table["roles"]:
+        if row["runs"] == "external":
+            row.update(runs="native", model=model, effort=row["effort"] if row["effort"] in MODELS[provider][model] else "medium")
+    return table
+
+
 def validate(table, provider, external_accounts):
     """The page is a trust boundary: only known values reach the shell recipe."""
     roles = []
@@ -316,6 +325,8 @@ def validate(table, provider, external_accounts):
     # The implementer edits code under the orchestrator's eyes and is every unlisted role's fallback: always native, always there.
     if [r["runs"] for r in roles if r["role"] == "implementer"] != ["native"]:
         raise ValueError("implementer must be listed once, as native")
+    if not external_accounts and any(r["runs"] == "external" for r in roles):
+        raise ValueError(f"no {OTHER[provider]} account to run external workers")
     folders = [a["folder"] for a in external_accounts]
     account = table.get("account")
     if account not in folders:
@@ -399,6 +410,8 @@ def validate_lead(body, all_accounts, sessions=()):
 def pick(saved):
     token = secrets.token_urlsafe(16)
     all_accounts = {p: accounts(p) for p in ("claude", "codex")}
+    if not any(all_accounts.values()):
+        sys.exit("fns: no Claude Code or Codex login found")
     state = {"repo": os.path.basename(os.getcwd()), "models": MODELS, "defaultModel": DEFAULT_MODEL, "leads": LEADS, "leadDefault": LEAD_DEFAULT, "accounts": all_accounts,
              "tables": {}, "lead": saved.get("lead") or {}}
     # One table per lead account (by alias name): claude and claude-work can route differently.
@@ -408,6 +421,8 @@ def pick(saved):
             t = load_table(mine, p)
             if not mine:
                 t["account"] = next((x["folder"] for x in all_accounts[OTHER[p]] if x["name"] == DEFAULT_EXTERNAL.get(OTHER[p])), t["account"])
+            if not all_accounts[OTHER[p]]:
+                native_only(t, p)
             state["tables"][a["name"]] = t
     chosen = {}
     sessions = []

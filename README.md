@@ -1,10 +1,28 @@
 # agents-runner
 
-`fns`: start a Claude Code or Codex session after picking, on one page, which account runs it and which account runs each worker the skills spawn.
+You pay for more than one coding-agent subscription (say Claude Code on two accounts, plus Codex) and want to spend them well: start each session on the account with quota left, and let another one do the reviews. `fns` is one command that does that from a small window.
+
+![The fns window: accounts with their quota on the left, the worker table below, recent sessions on the right](docs/window.png)
+
+*Placeholder data.*
+
+## What you do
+
+Run `fns` in a repo. The window shows:
+
+- **Lead account**: every Claude Code and Codex account you are logged into, with its 5-hour and weekly quota (read without spending tokens). Click the one that runs the session, then pick its model and effort.
+- **Workers**: who runs each subagent the skills spawn. For each role (`implementer`, `reviewer`, `prover`, `explorer`, or one you add), either the session's own subagents (native) or a one-shot run on the other CLI (external), with its model and effort. `implementer` is always native: the session works with it, and roles not listed fall back to it.
+- **Recent sessions** of that folder, from every account: click one to resume it, keeping its workers or changing them.
+
+Press Start (or Enter): the window closes and the session starts in your terminal with that worker table. Each account keeps its own table per repo, so next time it is already set. The window opens on `claude` (on `codex` without a Claude login), with the last model and effort you picked in that repo.
+
+In a hurry: type an account name as soon as the window opens (`work` for `claude-work`) and press Enter. A new session starts there with its saved table.
+
+Sessions started the usual way (`claude`, `codex`) are untouched: every worker is native, as before.
 
 ## Install
 
-Needs `python3`, `claude` and `codex`; on macOS, `swiftc` for the native window (without it the page opens in the browser).
+Needs `python3` and `claude`, `codex` or both; with one CLI only, every worker runs native. On macOS the window is built on first use with `swiftc`; without it the page opens in the browser.
 
 ```sh
 git clone https://github.com/gianmadd/agents-runner ~/.agents-runner
@@ -13,20 +31,23 @@ echo 'source ~/.agents-runner/workers.sh' >> ~/.zshrc   # or ~/.bashrc
 
 Open a new terminal, then run `fns` in any repo. To update: `git -C ~/.agents-runner pull`.
 
-[agents-repo-setup](https://github.com/gianmadd/agents-repo-setup) offers this install when a repo uses both Claude Code and Codex.
+Accounts come from your shell rc file: each CLI's default login, plus every alias that sets `CLAUDE_CONFIG_DIR` or `CODEX_HOME` and has a login, e.g. `alias claude-work='CLAUDE_CONFIG_DIR=~/.claude-work claude'`.
 
-## Workers across subscriptions
+[agents-repo-setup](https://github.com/gianmadd/agents-repo-setup) offers this install.
 
-`fns` opens a small window (built on first use with `swiftc` on macOS, else a browser page) and then starts a session in the current folder. There you pick which CLI and account to start (`claude`, `claude-work`, `codex`…) with its model and effort, see each subscription's remaining quota, read without spending tokens, and set the worker table: for each role the skills spawn (`implementer`, `reviewer`, `prover`, `explorer`, or one you add), whether the session's own subagents run it (native) or a one-shot headless run on the other CLI (external), with its model (Sonnet, Opus, Haiku; Luna, Sol, Terra) and effort. `implementer` is always native: the orchestrator works with it, and roles not listed fall back to it. Or click one of the folder's recent sessions, from every account, to resume it, keeping its workers or updating them. Press Start, and the session starts with that table. The page opens on `claude`, with the last model and effort you picked for it in that repo. To skip the page, type an account name as soon as it opens (`work` for `claude-work`) and press Enter: a new session starts there with its saved table. Started the usual way, every worker is native, as before. Why it works this way: [ADR 0001](docs/adr/0001-workers-chosen-per-session.md).
+## Good to know
 
-External workers run with permissions bypassed and return only a report, in `.scratch/workers/`: meant for the roles that only read or write in a throwaway copy (reviewer, prover, explorer).
+- **External workers run with permissions bypassed** and return only a report, in `.scratch/workers/`. Use them for roles that only read or work in a throwaway copy: reviewer, prover, explorer.
+- **The table goes into that session only**, as extra instructions. Skills that spawn workers, like `implement-loop` in [gianmadd/agentic-dev-kit](https://github.com/gianmadd/agentic-dev-kit), follow it; the text explains itself, so they need nothing else from here.
+- **What is saved**: the last choice per repo, in `.git/agents-workers.json`: never committed, shared by the repo's worktrees.
+- **Quota readings** come from the text of `claude -p /usage` (undocumented) and from `codex app-server` (experimental). A CLI update can break them; the card then shows "n/a".
 
-The skills that read the table are in [gianmadd/agentic-dev-kit](https://github.com/gianmadd/agentic-dev-kit) (`implement-loop`); the table injected into the session explains itself, so they need nothing else from here.
+Why it works this way: [ADR 0001](docs/adr/0001-workers-chosen-per-session.md).
 
 ## Files
 
 - [`workers.sh`](workers.sh): the `fns` shell function, sourced from the rc file
-- [`workers.py`](workers.py): the one-shot local server: quotas, recent sessions, the saved tables, and the launch
+- [`workers.py`](workers.py): the one-shot local server: accounts, quotas, recent sessions, saved tables, and the launch
 - [`page.html`](page.html): the page
 - [`window.swift`](window.swift): the native window around the page
 - [`test_workers.py`](test_workers.py): `python3 -m unittest`

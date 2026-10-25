@@ -61,6 +61,13 @@ class Table(unittest.TestCase):
             with self.assertRaises(ValueError):
                 workers.validate({"roles": roles}, "claude", ACCOUNTS)
 
+    def test_single_cli_runs_every_worker_native(self):
+        with self.assertRaises(ValueError):
+            workers.validate({"roles": [IMPL, {"role": "reviewer", "runs": "external", "model": "gpt-6-luna", "effort": "low"}]}, "claude", [])
+        t = workers.native_only({"roles": [IMPL, {"role": "reviewer", "runs": "external", "model": "gpt-6.1-sol", "effort": "ultra"}]}, "claude")
+        self.assertEqual(t["roles"][1], {"role": "reviewer", "runs": "native", "model": "sonnet", "effort": "medium"})
+        self.assertEqual(workers.validate(t, "claude", [])["account"], None)
+
     def test_validate_unknown_account_falls_back(self):
         t = workers.validate({"roles": [IMPL_CODEX, {"role": "reviewer", "runs": "external", "model": "sonnet", "effort": "low"}], "account": "/etc"},
                              "codex", ACCOUNTS)
