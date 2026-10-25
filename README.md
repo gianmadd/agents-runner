@@ -26,7 +26,7 @@ Needs `python3` and `claude`, `codex` or both; with one CLI only, every worker r
 
 ```sh
 git clone https://github.com/gianmadd/agents-runner ~/.agents-runner
-echo 'source ~/.agents-runner/workers.sh' >> ~/.zshrc   # or ~/.bashrc
+echo 'source ~/.agents-runner/fns.sh' >> ~/.zshrc   # or ~/.bashrc
 ```
 
 Open a new terminal, then run `fns` in any repo. To update: `git -C ~/.agents-runner pull`.
@@ -46,9 +46,10 @@ Why it works this way: [ADR 0001](docs/adr/0001-workers-chosen-per-session.md).
 
 ## Files
 
-- [`workers.sh`](workers.sh): the `fns` shell function, sourced from the rc file
-- [`workers.py`](workers.py): the one-shot local server: accounts, quotas, recent sessions, saved tables, and the launch
-- [`page.html`](page.html): the page
-- [`window.swift`](window.swift): the native window around the page
-- [`test_workers.py`](test_workers.py): `python3 -m unittest`
+- [`fns.sh`](fns.sh): the `fns` shell function, sourced from the rc file
+- [`src/workers.py`](src/workers.py): the one-shot local server: accounts, quotas, recent sessions, saved tables, and the launch
+- [`src/page.html`](src/page.html): the page
+- [`src/window.swift`](src/window.swift): the native window around the page
+- [`tests/`](tests/): `python3 -m unittest discover tests`
+- [`docs/adr/`](docs/adr/): why it works this way
 - [`GLOSSARY.md`](GLOSSARY.md): project vocabulary

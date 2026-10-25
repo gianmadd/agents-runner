@@ -1,6 +1,6 @@
 """`fns`: pick on a local page which CLI to start (claude, claude-work, codex…) and its worker table, then start it here.
 
-Usage (from the shell function in workers.sh): python3 workers.py
+Usage (from the shell function in fns.sh): python3 src/workers.py
 """
 import hashlib
 import http.server

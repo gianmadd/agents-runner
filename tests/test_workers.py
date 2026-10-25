@@ -1,12 +1,14 @@
-"""python3 -m unittest"""
+"""python3 -m unittest discover tests"""
 import datetime
 import json
 import os
+import sys
 import tempfile
 import unittest
 import zoneinfo
 
-import workers
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "src"))
+import workers  # noqa: E402
 
 
 class Parsing(unittest.TestCase):
