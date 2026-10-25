@@ -35,7 +35,6 @@
 
   h1 { font-size: 16px; margin: 0; letter-spacing: -0.01em; }
   h2 { font-size: 11px; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); margin: 0 0 10px; font-weight: 600; }
-  h2 small { text-transform: none; letter-spacing: 0; font-weight: 400; color: var(--faint); font-size: 12px; }
   .repo { font-size: 12px; color: var(--muted); }
   .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; }
   .faint { color: var(--faint); font-size: 12px; }
@@ -57,7 +56,7 @@
   .seg { display: inline-flex; flex-wrap: wrap; gap: 3px; padding: 3px; background: var(--hover); border-radius: 9px; }
   .seg button { border: 0; background: none; padding: 3px 9px; border-radius: 6px; font-size: 13px; color: var(--muted); white-space: nowrap; }
   .seg button:hover { color: var(--fg); }
-  .seg button[aria-pressed="true"] { background: var(--c, var(--card)); color: #fff; font-weight: 600; }
+  .seg button[aria-pressed="true"] { background: var(--cs, var(--card)); color: var(--c, var(--fg)); font-weight: 700; }
   .seg .grp { display: inline-flex; flex-wrap: wrap; gap: 3px; align-items: center; }
   .seg .grp + .grp { margin-left: 4px; padding-left: 7px; border-left: 1px solid var(--line); }
   .seg .who { font-size: 11px; color: var(--c); font-weight: 600; padding: 0 3px 0 4px; }
@@ -92,6 +91,8 @@
   .wrow .role small { display: block; font-weight: 400; color: var(--faint); font-size: 11px; }
   .wrow .runs { grid-column: 2; justify-self: start; display: flex; flex-wrap: wrap; gap: 8px; }
   .wrow .eff { grid-column: 2; justify-self: start; }
+  .wrow > .seg { justify-self: start; }
+  .wrow:last-child { border-bottom: 0; }
   .x { grid-row: 1; grid-column: 3; border: 0; background: none; color: var(--faint); padding: 4px 6px; }
   .x:hover { color: var(--hot); }
   .tools { display: flex; gap: 10px; align-items: center; justify-content: space-between; flex-wrap: wrap; padding: 10px 14px; }
@@ -99,16 +100,17 @@
   .add { border: 1px dashed var(--line); background: none; border-radius: 8px; padding: 3px 12px; color: var(--muted); }
   .locked { display: flex; gap: 10px; align-items: center; padding: 12px 14px; color: var(--muted); font-size: 13px; }
   .link { margin-left: auto; border: 0; background: none; color: var(--muted); text-decoration: underline; padding: 0; font-size: 13px; }
-  .hint { font-size: 12px; color: var(--faint); margin: 8px 2px 0; }
 
   /* Start bar */
-  .go { display: flex; align-items: center; gap: 14px; padding: 14px 26px; border-top: 1px solid var(--line); background: var(--card); }
-  .summary { flex: 1; font-size: 13px; color: var(--muted); }
-  .summary b { color: var(--fg); }
+  .go { display: flex; align-items: center; justify-content: center; gap: 14px; padding: 14px 26px; border-top: 1px solid var(--line); background: var(--card); }
   .warn { color: var(--hot); font-weight: 600; }
   #status { color: var(--hot); font-size: 12px; }
-  .kbd { font-size: 11px; color: var(--faint); border: 1px solid var(--line); border-radius: 4px; padding: 0 5px; }
-  #start { border: 0; border-radius: 10px; padding: 10px 24px; font-weight: 700; color: #fff; background: var(--c, var(--fg)); white-space: nowrap; }
+  #status:empty { display: none; }
+  #start { display: inline-flex; align-items: center; gap: 8px; border: 0; border-radius: 9px; padding: 7px 18px;
+    font-size: 14px; font-weight: 600; color: var(--c, var(--bg)); background: var(--cs, var(--fg)); white-space: nowrap; transition: filter .15s, transform .05s; }
+  #start:hover { filter: brightness(.97); }
+  #start:active { transform: translateY(1px); }
+  #start .kbd { font-size: 11px; border: 1px solid currentColor; border-radius: 4px; padding: 0 5px; opacity: .7; }
 
   /* Session list */
   .search { width: 100%; border: 1px solid var(--line); background: var(--card); border-radius: 8px; padding: 6px 10px; font-size: 13px; }
@@ -156,14 +158,13 @@
 <div class="split">
   <main class="detail">
     <div class="scroll" id="detail"></div>
-    <div class="go"><span class="summary" id="summary"></span><span id="status"></span><span class="kbd">⏎</span><button id="start">Start</button></div>
+    <div class="go"><span id="status"></span><button id="start"><span id="startLabel">Start</span><span class="kbd">⏎</span></button></div>
   </main>
   <aside class="pane">
     <div class="hd">
       <div class="top"><div><h1>Start a session</h1><span class="repo" id="repo"></span></div><button class="theme" id="theme" type="button"></button></div>
       <input class="search" id="q" placeholder="Search sessions" spellcheck="false" aria-label="Search sessions">
       <div class="chips" id="chips"></div>
-      <span class="faint">Or type an account name anywhere, then ⏎, to start a new session on it.</span>
     </div>
     <div class="scroll" id="list"><div class="empty">Reading…</div></div>
   </aside>
@@ -229,10 +230,9 @@ function seg(groups, value, onPick) {
 }
 const opts = list => list.map(v => ({value: v, label: short(v)}));  // models
 const plain = list => list.map(v => ({value: v}));  // efforts, as they are
-function section(title, note, ...children) {
-  const s = el('section'), h = el('h2', null, title);
-  if (note) h.append(' ', el('small', null, '· ' + note));
-  s.append(h, ...children);
+function section(title, ...children) {
+  const s = el('section');
+  s.append(el('h2', null, title), ...children);
   return s;
 }
 
@@ -269,7 +269,7 @@ function wins(p, i) {
   return box;
 }
 for (const p of ['claude', 'codex']) S.accounts[p].forEach((_, i) => {
-  const done = q => { quota[`${p}|${i}`] = q; document.querySelectorAll(`[data-q="${p}|${i}"]`).forEach(b => b.replaceWith(wins(p, i))); summary(); };
+  const done = q => { quota[`${p}|${i}`] = q; document.querySelectorAll(`[data-q="${p}|${i}"]`).forEach(b => b.replaceWith(wins(p, i))); };
   fetch(`quota/${p}/${i}`).then(r => r.json()).then(q => done(q.error ? {error: q.error} : q.windows)).catch(() => done({error: ''}));
 });
 
@@ -295,23 +295,21 @@ function renderDetail() {
     head.append(el('p', 'bigt', resume.title), el('span', 'faint', `last active ${ago(resume.time)}`));
     const runs = card(prov, leadIdx, false);
     runs.style.maxWidth = '440px';
-    box.append(head, section('Runs on', null, runs), section('Workers', update ? `saved for ${leadName()} in this repo` : null, update ? workers() : locked()));
+    box.append(head, section('Runs on', runs), section('Workers', update ? workers() : locked()));
   } else {
     const accs = el('div', 'accs');
     for (const p of ['claude', 'codex']) S.accounts[p].forEach((_, i) => accs.append(card(p, i, true)));
-    const model = el('div');
-    model.style.cssText = 'display:grid;gap:8px';
+    const model = el('div', 'card');  // laid out like the workers table below
     const models = Object.keys(S.leads[prov]), efforts = S.leads[prov][lead.model];
-    const row = (label, picker) => { const f = el('div', 'field'); f.append(el('span', null, label), picker); return f; };
+    const row = (label, picker) => { const f = el('div', 'wrow'); f.append(el('div', 'role', label), picker); return f; };
     model.append(
       row('Model', seg([{acc: [prov, leadIdx], options: opts(models)}], lead.model, m => { lead.model = m; fixLead(); renderDetail(); })),
       row('Effort', seg([{acc: [prov, leadIdx], options: plain(efforts)}], lead.effort, e => { lead.effort = e; renderDetail(); })));
-    box.append(el('p', 'bigt', 'New session'), section('Lead account', null, accs), section('Lead model', null, model),
-      section('Workers', `saved for ${leadName()} in this repo`, workers()));
+    box.append(el('p', 'bigt', 'New session'), section('Lead account', accs), section('Lead model', model),
+      section('Workers', workers()));
   }
   tint($('start'), prov, leadIdx);
-  $('start').textContent = resume ? 'Resume' : 'Start';
-  summary();
+  $('startLabel').textContent = resume ? 'Resume' : 'Start';
 }
 function locked() {
   const box = el('div', 'card locked'), change = el('button', 'link', 'Change for this resume');
@@ -329,7 +327,7 @@ function fixLead() {
 
 // --- Workers: rows built from the lead account's table; pickers edit it in place ---
 function workers() {
-  const box = el('div'), rows = el('div', 'card');
+  const rows = el('div', 'card');
   for (const r of table().roles) {
     const row = el('div', 'wrow');
     const role = el('div', 'role');
@@ -378,8 +376,7 @@ function workers() {
     tools.append(f);
   }
   rows.append(tools);
-  box.append(rows, el('p', 'hint', 'Native: the session\'s own subagents. External: one-shot runs on the other CLI that only return a report. A role not listed runs as implementer, which is always native.'));
-  return box;
+  return rows;
 }
 
 // Each lead account keeps its own table: picking another account shows that one.
@@ -513,16 +510,6 @@ $('spotq').onkeydown = e => {
   else if (e.key === 'Enter' && list.length) { e.preventDefault(); launch(list[spotIdx]); }
 };
 $('spot').onclick = e => { if (e.target === $('spot')) closeSpot(); };
-
-function summary() {
-  if (!prov) return;
-  const s = $('summary');
-  s.replaceChildren();
-  if (resume) s.append('Resume on ', el('b', null, leadName()), ` · ${update ? 'new workers' : 'same workers'}`);
-  else s.append('New on ', el('b', null, leadName()), ` · ${short(lead.model)} · ${lead.effort} · external on ${extName()}`);
-  const top = peak(prov, leadIdx);
-  if (top >= 90) s.append(' · ', el('span', 'warn', `${leadName()} is at ${Math.round(top)}% of a limit`));
-}
 
 // Always open on the claude account; its model and effort are the last ones picked for Claude in this repo.
 selectLead('claude', Math.max(0, S.accounts.claude.findIndex(a => a.name === 'claude')));
