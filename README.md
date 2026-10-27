@@ -11,7 +11,7 @@ You pay for more than one coding-agent subscription (say Claude Code on two acco
 Run `fns` in a repo. The window shows:
 
 - **Lead account**: every Claude Code and Codex account you are logged into, with its 5-hour and weekly quota (read without spending tokens). Click the one that runs the session, then pick its model and effort.
-- **Workers**: who runs each subagent the skills spawn. For each role (`implementer`, `reviewer`, `prover`, `explorer`, or one you add), either the session's own subagents (native) or a one-shot run on the other CLI (external), with its model and effort. `implementer` is always native: the session works with it, and roles not listed fall back to it.
+- **Workers**: who runs each subagent the skills spawn. For each role (`implementer`, `reviewer`, `explorer`, or one you add), either the session's own subagents (native) or a one-shot run on the other CLI (external), with its model and effort. `implementer` is always native: the session works with it, and roles not listed fall back to it.
 - **Recent sessions** of that folder, from every account: click one to resume it, keeping its workers or changing them.
 
 Press Start (or Enter): the window closes and the session starts in your terminal with that worker table. Each account keeps its own table per repo, so next time it is already set. The window opens on `claude` (on `codex` without a Claude login), with the last model and effort you picked in that repo.
@@ -37,7 +37,7 @@ Accounts come from your shell rc file: each CLI's default login, plus every alia
 
 ## Good to know
 
-- **External workers run with permissions bypassed** and return only a report, in `.scratch/workers/`. Use them for roles that only read or work in a throwaway copy: reviewer, prover, explorer.
+- **External workers run with permissions bypassed** and return only a report, in `.scratch/workers/`. Use them for roles that only read or work in a throwaway copy: reviewer, explorer.
 - **The table goes into that session only**, as extra instructions. Skills that spawn workers, like `implement-loop` in [gianmadd/agentic-dev-kit](https://github.com/gianmadd/agentic-dev-kit), follow it; the text explains itself, so they need nothing else from here.
 - **What is saved**: the last choice per repo, in `.git/agents-workers.json`: never committed, shared by the repo's worktrees.
 - **Quota readings** come from the text of `claude -p /usage` (undocumented) and from `codex app-server` (experimental). A CLI update can break them; the card then shows "n/a".

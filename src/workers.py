@@ -46,7 +46,6 @@ DEFAULT_TABLE = {
     "roles": [
         {"role": "implementer", "runs": "native", "effort": "medium"},
         {"role": "reviewer", "runs": "native", "effort": "medium"},
-        {"role": "prover", "runs": "native", "effort": "medium"},
         {"role": "explorer", "runs": "native", "effort": "low"},
     ],
     "account": None,
@@ -354,7 +353,7 @@ def instructions(provider, table, names):
         for r in table["roles"])
     return f"""## Workers
 
-This session's worker table, chosen at launch. When a skill spawns a worker (implementer, reviewer, prover, explorer…), look up its role; a role not listed is `implementer`.
+This session's worker table, chosen at launch. When a skill spawns a worker (implementer, reviewer, explorer…), look up its role; a role not listed is `implementer`.
 
 | Role | Runs | Model | Effort |
 |------|------|-------|--------|
