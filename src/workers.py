@@ -28,15 +28,15 @@ _E5 = ["low", "medium", "high", "xhigh", "max"]
 # Worker models per provider, weakest first, each with the efforts its CLI accepts (codex: ~/.codex/models_cache.json).
 MODELS = {
     "claude": {"haiku": _E5, "sonnet": _E5, "opus": _E5},
-    "codex": {"gpt-6-luna": _E5, "gpt-5.6-terra": _E5 + ["ultra"], "gpt-6.1-sol": _E5 + ["ultra"]},
+    "codex": {"gpt-6-luna": _E5, "gpt-6.1-terra": _E5 + ["ultra"], "gpt-6.1-sol": _E5 + ["ultra"]},
 }
-DEFAULT_MODEL = {"claude": "sonnet", "codex": "gpt-6-luna"}
+DEFAULT_MODEL = {"claude": "sonnet", "codex": "gpt-6.1-terra"}
 # The account external runs use until a table is saved, by alias name; falls back to the first account.
 DEFAULT_EXTERNAL = {"claude": "claude-work"}
 # Orchestrator models, weakest first; LEAD_DEFAULT is preselected (opus as the Setup's Subagents entry, sol as Codex's config).
 LEADS = {
     "claude": {"haiku": _E5, "sonnet": _E5, "opus": _E5, "fable": _E5},
-    "codex": {"gpt-6-luna": _E5, "gpt-5.6-terra": _E5 + ["ultra"], "gpt-6.1-sol": _E5 + ["ultra"]},
+    "codex": {"gpt-6-luna": _E5, "gpt-6.1-terra": _E5 + ["ultra"], "gpt-6.1-sol": _E5 + ["ultra"]},
 }
 LEAD_DEFAULT = {"claude": {"model": "opus", "effort": "medium"}, "codex": {"model": "gpt-6.1-sol", "effort": "medium"}}
 OTHER = {"claude": "codex", "codex": "claude"}

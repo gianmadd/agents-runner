@@ -91,7 +91,7 @@ class Table(unittest.TestCase):
 
     def test_default_table_is_all_native(self):
         roles = workers.load_table(None, "codex")["roles"]
-        self.assertEqual([(r["runs"], r["model"]) for r in roles], [("native", "gpt-6-luna")] * 3)
+        self.assertEqual([(r["runs"], r["model"]) for r in roles], [("native", "gpt-6.1-terra")] * 3)
 
     def test_instructions_from_codex_name_the_claude_account(self):
         text = workers.instructions("codex", {"roles": DEFAULT_ROLES, "account": "~/.claude-work"}, {"native": "codex", "external": "claude-work"})
