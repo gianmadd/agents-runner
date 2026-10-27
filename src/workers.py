@@ -33,7 +33,7 @@ MODELS = {
 DEFAULT_MODEL = {"claude": "sonnet", "codex": "gpt-6.1-terra"}
 # The account external runs use until a table is saved, by alias name; falls back to the first account.
 DEFAULT_EXTERNAL = {"claude": "claude-work"}
-# Orchestrator models, weakest first; LEAD_DEFAULT is preselected (opus as the Setup's Subagents entry, sol as Codex's config).
+# Orchestrator models, weakest first; LEAD_DEFAULT is preselected (opus for Claude, sol as Codex's config).
 LEADS = {
     "claude": {"haiku": _E5, "sonnet": _E5, "opus": _E5, "fable": _E5},
     "codex": {"gpt-6-luna": _E5, "gpt-6.1-terra": _E5 + ["ultra"], "gpt-6.1-sol": _E5 + ["ultra"]},
@@ -353,7 +353,7 @@ def instructions(provider, table, names):
         for r in table["roles"])
     return f"""## Workers
 
-This session's worker table, chosen at launch. When a skill spawns a worker (implementer, reviewer, explorer…), look up its role; a role not listed is `implementer`.
+This session's worker table, chosen at launch: it replaces the repo's rules on subagent models and effort for this session. When a skill spawns a worker (implementer, reviewer, explorer…), look up its role; a role not listed is `implementer`.
 
 | Role | Runs | Model | Effort |
 |------|------|-------|--------|

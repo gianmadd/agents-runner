@@ -83,6 +83,7 @@ class Table(unittest.TestCase):
         self.assertIn("| implementer | native (claude-work) | opus | max |", text)
         self.assertIn("codex exec --dangerously-bypass-approvals-and-sandbox", text)
         self.assertNotIn("CODEX_HOME", text)
+        self.assertIn("replaces the repo's rules on subagent models", text)
 
     def test_old_saved_rows_get_the_default_model(self):
         t = workers.load_table({"roles": [{"role": "reviewer", "runs": "external", "effort": "high"}]}, "codex")
