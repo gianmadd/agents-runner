@@ -41,6 +41,8 @@
   .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--c); flex: none; }
   .theme { width: 30px; height: 30px; border-radius: 50%; border: 1px solid var(--line); background: var(--card); color: var(--muted); font-size: 15px; line-height: 1; flex: none; }
   .theme:hover { color: var(--fg); }
+  .refresh { float: right; padding: 0 4px; border: 0; background: none; color: var(--muted); font-size: 13px; line-height: 1; cursor: pointer; }
+  .refresh:hover { color: var(--fg); }
 
   /* Two panes: what starts on the left, the sessions to pick from on the right; each scrolls on its own. */
   .split { display: grid; grid-template-columns: 1fr 380px; height: 100%; }
@@ -162,7 +164,7 @@
   </main>
   <aside class="pane">
     <div class="hd">
-      <div class="top"><div><h1>Start a session</h1><span class="repo" id="repo"></span></div><span><button class="theme" id="refresh" type="button" aria-label="Refresh quotas" title="Refresh quotas">↻</button> <button class="theme" id="theme" type="button"></button></span></div>
+      <div class="top"><div><h1>Start a session</h1><span class="repo" id="repo"></span></div><button class="theme" id="theme" type="button"></button></div>
       <input class="search" id="q" placeholder="Search sessions" spellcheck="false" aria-label="Search sessions">
       <div class="chips" id="chips"></div>
     </div>
@@ -275,7 +277,13 @@ const readQuotas = () => { for (const p of ['claude', 'codex']) S.accounts[p].fo
   fetch(`quota/${p}/${i}`).then(r => r.json()).then(q => done(q.error ? {error: q.error} : q.windows)).catch(() => done({error: ''}));
 }); };
 readQuotas();
-$('refresh').onclick = readQuotas;
+// A section of account cards gets a ↻ next to its title that reads every quota again.
+function withRefresh(sec) {
+  const b = el('button', 'refresh', '↻');
+  b.type = 'button'; b.title = b.ariaLabel = 'Refresh quotas'; b.onclick = readQuotas;
+  sec.querySelector('h2').append(b);
+  return sec;
+}
 
 // An account card: a button that makes it the lead for a new session, or a plain card when it can't change.
 function card(p, i, pick) {
@@ -299,7 +307,7 @@ function renderDetail() {
     head.append(el('p', 'bigt', resume.title), el('span', 'faint', `last active ${ago(resume.time)}`));
     const runs = card(prov, leadIdx, false);
     runs.style.maxWidth = '440px';
-    box.append(head, section('Runs on', runs), section('Workers', update ? workers() : locked()));
+    box.append(head, withRefresh(section('Runs on', runs)), section('Workers', update ? workers() : locked()));
   } else {
     const accs = el('div', 'accs');
     for (const p of ['claude', 'codex']) S.accounts[p].forEach((_, i) => accs.append(card(p, i, true)));
@@ -309,7 +317,7 @@ function renderDetail() {
     model.append(
       row('Model', seg([{acc: [prov, leadIdx], options: opts(models)}], lead.model, m => { lead.model = m; fixLead(); renderDetail(); })),
       row('Effort', seg([{acc: [prov, leadIdx], options: plain(efforts)}], lead.effort, e => { lead.effort = e; renderDetail(); })));
-    box.append(el('p', 'bigt', 'New session'), section('Lead account', accs), section('Lead model', model),
+    box.append(el('p', 'bigt', 'New session'), withRefresh(section('Lead account', accs)), section('Lead model', model),
       section('Workers', workers()));
   }
   tint($('start'), prov, leadIdx);

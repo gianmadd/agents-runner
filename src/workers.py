@@ -438,11 +438,14 @@ def pick(saved):
 
         def reply(self, code, body, kind="application/json"):
             data = body.encode()
-            self.send_response(code)
-            self.send_header("Content-Type", kind)
-            self.send_header("Content-Length", str(len(data)))
-            self.end_headers()
-            self.wfile.write(data)
+            try:
+                self.send_response(code)
+                self.send_header("Content-Type", kind)
+                self.send_header("Content-Length", str(len(data)))
+                self.end_headers()
+                self.wfile.write(data)
+            except ConnectionError:  # the window closed while a quota was still being read
+                pass
 
         def do_GET(self):
             if self.path == f"/{token}/":
@@ -455,10 +458,10 @@ def pick(saved):
             elif self.path.startswith(f"/{token}/quota/"):
                 p, _, i = self.path[len(f"/{token}/quota/"):].partition("/")
                 try:
-                    account = all_accounts[p][int(i)]
-                    self.reply(200, json.dumps({"windows": read_quota(p, account["folder"])}))
+                    body = {"windows": read_quota(p, all_accounts[p][int(i)]["folder"])}
                 except Exception as e:  # any failure shows as n/a on the page
-                    self.reply(200, json.dumps({"error": str(e)[:200]}))
+                    body = {"error": str(e)[:200]}
+                self.reply(200, json.dumps(body))
             else:
                 self.reply(404, "{}")
 
