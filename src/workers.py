@@ -30,7 +30,7 @@ MODELS = {
     "claude": {"haiku": _E5, "sonnet": _E5, "opus": _E5},
     "codex": {"gpt-6-luna": _E5, "gpt-6.1-terra": _E5 + ["ultra"], "gpt-6.1-sol": _E5 + ["ultra"]},
 }
-DEFAULT_MODEL = {"claude": "sonnet", "codex": "gpt-6.1-terra"}
+DEFAULT_MODEL = {"claude": "sonnet", "codex": "gpt-6-luna"}
 # The account external runs use until a table is saved, by alias name; falls back to the first account.
 DEFAULT_EXTERNAL = {"claude": "claude-work"}
 # Orchestrator models, weakest first; LEAD_DEFAULT is preselected (opus for Claude, sol as Codex's config).
