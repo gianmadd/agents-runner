@@ -116,7 +116,7 @@ class Table(unittest.TestCase):
         text = workers.instructions("claude", table, names, subagents=True)
         self.assertIn("| implementer | external (codex) | gpt-6.1-sol | high |", text)
         self.assertIn("`subagent_type` `codex:<family>`", text)
-        self.assertIn("for the implementer, `approvals: ask`", text)
+        self.assertIn("for the implementer, `network: on` and `approvals: auto`", text)
         self.assertIn("`sandbox: read-only` and `approvals: never`", text)
         # The fallback when the plugin does not answer: the one-shot recipe, never for the implementer.
         self.assertIn("run the implementer as a native subagent", text)

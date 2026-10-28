@@ -383,7 +383,7 @@ def instructions(provider, table, names, subagents=False):
     if subagents and other == "codex":
         external = f"""- **external**: a Codex subagent. Spawn it with the Agent tool, `subagent_type` `codex:<family>` (the model's last word: gpt-6.1-sol → `codex:sol`), and a prompt whose first lines are:
   - `effort: <effort>` from the role's row;
-  - for the implementer, `approvals: ask` (it writes only in its working folder and asks the user for anything more);
+  - for the implementer, `network: on` and `approvals: auto` (it writes only in its working folder and reaches databases and APIs; Codex's own reviewer decides anything more);
   - for any other role, which only reports, `sandbox: read-only` and `approvals: never`.
   Codex sees nothing of this conversation: put the whole task after those lines, naming the folder it must work in (the ticket's worktree, if any) and ending with the repo's git rules: never push, never touch the main branch. Its final message is the worker's result; SendMessage to it follows up on the same Codex thread. Several can run at once.
   If no `codex:<family>` agent type is listed, or the spawn is refused, tell the user in one line why, then run the implementer as a native subagent, and any other role as a one-shot headless run on codex:
