@@ -100,6 +100,23 @@ def accounts(provider):
     return [a for a in found if logged_in(provider, a["folder"])]
 
 
+PLUGIN = "codex@codex-plugin"
+
+
+def codex_subagents(folder):
+    """Whether the Claude account runs Codex as native subagents: the codex plugin installed and enabled there.
+    Undocumented files: a format change reads as absent, which is today's behaviour."""
+    base = expand(folder or DEFAULT_DIR["claude"])
+    try:
+        with open(os.path.join(base, "plugins", "installed_plugins.json")) as f:
+            installed = PLUGIN in (json.load(f).get("plugins") or {})
+        with open(os.path.join(base, "settings.json")) as f:
+            enabled = (json.load(f).get("enabledPlugins") or {}).get(PLUGIN) is True
+    except (OSError, ValueError, AttributeError):
+        return False
+    return installed and enabled
+
+
 def env_for(provider, account):
     env = dict(os.environ)
     env.pop(ENV[provider], None)
@@ -315,8 +332,8 @@ def native_only(table, provider):
     return table
 
 
-def validate(table, provider, external_accounts):
-    """The page is a trust boundary: only known values reach the shell recipe."""
+def validate(table, provider, external_accounts, subagents=False):
+    """The page is a trust boundary: only known values reach the shell recipe. subagents: Codex runs as native subagents here."""
     roles = []
     for row in table.get("roles", []):
         role = str(row.get("role", "")).strip()
@@ -325,9 +342,11 @@ def validate(table, provider, external_accounts):
         if not re.fullmatch(r"[a-z][a-z0-9-]{0,30}", role) or row.get("model") not in models or row.get("effort") not in models[row["model"]]:
             raise ValueError(f"bad row: {row}")
         roles.append({"role": role, "runs": runs, "model": row["model"], "effort": row["effort"]})
-    # The implementer edits code under the orchestrator's eyes and is every unlisted role's fallback: always native, always there.
-    if [r["runs"] for r in roles if r["role"] == "implementer"] != ["native"]:
-        raise ValueError("implementer must be listed once, as native")
+    # The implementer edits code under the orchestrator's eyes and is every unlisted role's fallback: always there, and native
+    # unless Codex runs as a subagent the orchestrator follows up with (a one-shot run without a sandbox never edits).
+    allowed = (["native"], ["external"]) if subagents else (["native"],)
+    if [r["runs"] for r in roles if r["role"] == "implementer"] not in allowed:
+        raise ValueError("implementer must be listed once, as native" + (" or external" if subagents else ""))
     if not external_accounts and any(r["runs"] == "external" for r in roles):
         raise ValueError(f"no {OTHER[provider]} account to run external workers")
     folders = [a["folder"] for a in external_accounts]
@@ -337,8 +356,9 @@ def validate(table, provider, external_accounts):
     return {"roles": roles, "account": account}
 
 
-def instructions(provider, table, names):
-    """The text injected into the session: the table and how to run an external worker. names: native/external → account name."""
+def instructions(provider, table, names, subagents=False):
+    """The text injected into the session: the table and how to run an external worker. names: native/external → account name.
+    subagents: a Claude session with the codex plugin, where an external worker is a codex:<family> subagent."""
     other = OTHER[provider]
     folder = ".scratch/workers/<role>-<slug>-<HHMMSS>"
     prefix = f"{ENV[other]}={table['account']} " if table["account"] else ""
@@ -355,6 +375,23 @@ def instructions(provider, table, names):
         f"| {r['role']} | {r['runs']} ({names[r['runs']]}) | "
         f"{r['model']} | {r['effort']} |"
         for r in table["roles"])
+    headless = f"""  1. Create `{folder}/` (paths relative to the repo root, absolute in the command) and write the whole task to `prompt.md` there, ending with the repo's git rules: never push, never touch the main branch.
+  2. From the folder the worker must work in (the ticket's worktree, if any), {wait}:
+     `{recipe}`
+     with `<model>` and `<effort>` from the role's row.
+  3. It succeeded when the exit code is 0 and `report.md` is not empty: that file is the worker's report. Otherwise read `run.log`, tell the user in one line why it failed, and run the role as a native subagent instead."""
+    if subagents and other == "codex":
+        external = f"""- **external**: a Codex subagent. Spawn it with the Agent tool, `subagent_type` `codex:<family>` (the model's last word: gpt-6.1-sol → `codex:sol`), and a prompt whose first lines are:
+  - `effort: <effort>` from the role's row;
+  - for the implementer, `approvals: ask` (it writes only in its working folder and asks the user for anything more);
+  - for any other role, which only reports, `sandbox: read-only` and `approvals: never`.
+  Codex sees nothing of this conversation: put the whole task after those lines, naming the folder it must work in (the ticket's worktree, if any) and ending with the repo's git rules: never push, never touch the main branch. Its final message is the worker's result; SendMessage to it follows up on the same Codex thread. Several can run at once.
+  If no `codex:<family>` agent type is listed, or the spawn is refused, tell the user in one line why, then run the implementer as a native subagent, and any other role as a one-shot headless run on codex:
+{headless}"""
+    else:
+        external = f"""- **external**: a one-shot headless run on {other}, which only returns a report. For each one:
+{headless}
+  Several external workers can run at once: start them together, then wait for each."""
     return f"""## Workers
 
 This session's worker table, chosen at launch: it replaces the repo's rules on subagent models and effort for this session. When a skill spawns a worker (implementer, reviewer, explorer…), look up its role; a role not listed is `implementer`.
@@ -364,13 +401,7 @@ This session's worker table, chosen at launch: it replaces the repo's rules on s
 {rows}
 
 - **native**: spawn your own subagent with that model and effort.
-- **external**: a one-shot headless run on {other}, which only returns a report. For each one:
-  1. Create `{folder}/` (paths relative to the repo root, absolute in the command) and write the whole task to `prompt.md` there, ending with the repo's git rules: never push, never touch the main branch.
-  2. From the folder the worker must work in (the ticket's worktree, if any), {wait}:
-     `{recipe}`
-     with `<model>` and `<effort>` from the role's row.
-  3. It succeeded when the exit code is 0 and `report.md` is not empty: that file is the worker's report. Otherwise read `run.log`, tell the user in one line why it failed, and run the role as a native subagent instead.
-  Several external workers can run at once: start them together, then wait for each.
+{external}
 """
 
 
@@ -415,7 +446,8 @@ def pick(saved):
     all_accounts = {p: accounts(p) for p in ("claude", "codex")}
     if not any(all_accounts.values()):
         sys.exit("fns: no Claude Code or Codex login found")
-    state = {"repo": os.path.basename(os.getcwd()), "models": MODELS, "defaultModel": DEFAULT_MODEL, "leads": LEADS, "leadDefault": LEAD_DEFAULT, "accounts": all_accounts,
+    state = {"repo": os.path.basename(os.getcwd()), "models": MODELS,
+             "subagents": {a["name"]: codex_subagents(a["folder"]) for a in all_accounts["claude"]}, "defaultModel": DEFAULT_MODEL, "leads": LEADS, "leadDefault": LEAD_DEFAULT, "accounts": all_accounts,
              "tables": {}, "lead": saved.get("lead") or {}}
     # One table per lead account (by alias name): claude and claude-work can route differently.
     for p in ("claude", "codex"):
@@ -472,7 +504,8 @@ def pick(saved):
                 body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))))
                 reader.join()
                 lead = validate_lead(body.get("lead", {}), all_accounts, sessions)
-                chosen.update(lead=lead, table=validate(body, lead["provider"], all_accounts[OTHER[lead["provider"]]]))
+                subagents = lead["provider"] == "claude" and codex_subagents(lead["folder"])
+                chosen.update(lead=lead, table=validate(body, lead["provider"], all_accounts[OTHER[lead["provider"]]], subagents))
             except (ValueError, AttributeError) as e:
                 return self.reply(400, json.dumps({"error": str(e)}))
             self.reply(200, "{}")
@@ -541,7 +574,8 @@ def main():
     os.environ.pop(ENV[lead["provider"]], None)  # the default account needs the env var unset
     if lead["folder"]:
         os.environ[ENV[lead["provider"]]] = expand(lead["folder"])
-    argv = launch_argv(lead, instructions(lead["provider"], table, names))
+    subagents = lead["provider"] == "claude" and codex_subagents(lead["folder"])
+    argv = launch_argv(lead, instructions(lead["provider"], table, names, subagents))
     os.execvp(argv[0], argv)
 
 

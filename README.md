@@ -38,6 +38,7 @@ Accounts come from your shell rc file: each CLI's default login, plus every alia
 ## Good to know
 
 - **External workers run with permissions bypassed** and return only a report, in `.scratch/workers/`. Use them for roles that only read or work in a throwaway copy: reviewer, explorer.
+- **With the [codex plugin](https://github.com/gianmadd/claude-code-codex-plugin)** installed and enabled in a Claude account, a session led from it runs external workers as `codex:<family>` subagents instead: in Codex's sandbox (read-only for the roles that report), in the task list, and open to follow-ups. There the implementer may run on Codex too. The plugin uses Codex's default login, whatever account the page picks; where it does not answer, the session falls back to the run above, and to a native implementer.
 - **The table goes into that session only**, as extra instructions. Skills that spawn workers, like `implement-loop` in [gianmadd/agentic-dev-kit](https://github.com/gianmadd/agentic-dev-kit), follow it; the text explains itself, so they need nothing else from here.
 - **What is saved**: the last choice per repo, in `.git/agents-workers.json`: never committed, shared by the repo's worktrees.
 - **Quota readings** come from the text of `claude -p /usage` (undocumented) and from `codex app-server` (experimental). A CLI update can break them; the card then shows "n/a".

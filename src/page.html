@@ -198,6 +198,8 @@ const leadName = () => S.accounts[prov][leadIdx].name;
 const accName = (p, i) => (S.accounts[p][i] || {name: p}).name;
 const provOf = runs => runs === 'native' ? prov : OTHER[prov];
 const accOf = runs => runs === 'native' ? leadIdx : extIndex();
+// A Claude lead with the codex plugin runs Codex as subagents it follows up with: the implementer may run there too.
+const subagents = () => prov === 'claude' && !!S.subagents[S.accounts.claude[leadIdx]?.name];
 const table = () => S.tables[leadName()];  // one table per lead account: claude and claude-work can route differently
 $('repo').textContent = S.repo;
 
@@ -344,7 +346,8 @@ function workers() {
     const row = el('div', 'wrow');
     const role = el('div', 'role');
     if (r.role === 'implementer') {
-      role.append('implementer', el('small', null, 'always native'));
+      if (r.runs === 'external' && !subagents()) Object.assign(r, {runs: 'native', model: S.defaultModel[prov], effort: 'medium'});
+      role.append('implementer', el('small', null, subagents() ? 'native or external' : 'always native'));
     } else {
       const name = el('input');
       name.value = r.role; name.placeholder = 'role name'; name.spellcheck = false; name.setAttribute('aria-label', 'Role name');
@@ -352,7 +355,7 @@ function workers() {
       role.append(name);
     }
     const groups = [{who: leadName(), acc: [prov, leadIdx], options: opts(Object.keys(S.models[prov])).map(o => ({...o, value: 'native|' + o.value}))}];
-    if (r.role !== 'implementer' && ext().length) groups.push({who: extName(), acc: [OTHER[prov], extIndex()], options: opts(Object.keys(S.models[OTHER[prov]])).map(o => ({...o, value: 'external|' + o.value}))});
+    if ((r.role !== 'implementer' || subagents()) && ext().length) groups.push({who: extName(), acc: [OTHER[prov], extIndex()], options: opts(Object.keys(S.models[OTHER[prov]])).map(o => ({...o, value: 'external|' + o.value}))});
     const pick = v => {
       [r.runs, r.model] = v.split('|');
       if (!S.models[provOf(r.runs)][r.model].includes(r.effort)) r.effort = 'medium';

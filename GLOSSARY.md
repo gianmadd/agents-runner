@@ -9,14 +9,14 @@ A subagent a skill spawns to do part of its work (implement, review, prove, expl
 _Avoid_: delegate, helper
 
 **Worker table**:
-The per-session map from each worker role to native or external, with its model and effort; chosen on the launcher's page and injected into that session only. `implementer` is always native, and a role not listed runs as `implementer`.
+The per-session map from each worker role to native or external, with its model and effort; chosen on the launcher's page and injected into that session only. `implementer` is native, or external where Codex runs as a subagent, and a role not listed runs as `implementer`.
 _Avoid_: role table, routing table
 
 **Native**:
 A worker run as the session's own subagent, on the session's account.
 
 **External**:
-A worker run as a one-shot headless process on the other provider: prompt in, report out, no resume.
+A worker run on the other provider: a one-shot headless process (prompt in, report out, no resume), or, from a Claude account with the codex plugin, a `codex:<family>` subagent.
 _Avoid_: delegate, headless agent
 
 **Launcher**:

@@ -85,6 +85,46 @@ class Table(unittest.TestCase):
         self.assertNotIn("CODEX_HOME", text)
         self.assertIn("replaces the repo's rules on subagent models", text)
 
+    def test_codex_subagents_needs_the_plugin_installed_and_enabled(self):
+        with tempfile.TemporaryDirectory() as d:
+            self.assertFalse(workers.codex_subagents(d))
+            os.makedirs(os.path.join(d, "plugins"))
+            with open(os.path.join(d, "plugins", "installed_plugins.json"), "w") as f:
+                json.dump({"plugins": {"codex@codex-plugin": [{"version": "0.2.10"}]}}, f)
+            with open(os.path.join(d, "settings.json"), "w") as f:
+                json.dump({"enabledPlugins": {"codex@codex-plugin": False}}, f)
+            self.assertFalse(workers.codex_subagents(d))
+            with open(os.path.join(d, "settings.json"), "w") as f:
+                json.dump({"enabledPlugins": {"codex@codex-plugin": True}}, f)
+            self.assertTrue(workers.codex_subagents(d))
+            with open(os.path.join(d, "settings.json"), "w") as f:
+                f.write("[]")
+            self.assertFalse(workers.codex_subagents(d))
+
+    def test_implementer_runs_external_only_with_codex_subagents(self):
+        impl = {"role": "implementer", "runs": "external", "model": "gpt-6.1-sol", "effort": "high"}
+        with self.assertRaises(ValueError):
+            workers.validate({"roles": [impl]}, "claude", ACCOUNTS)
+        self.assertEqual(workers.validate({"roles": [impl]}, "claude", ACCOUNTS, subagents=True)["roles"], [impl])
+        with self.assertRaises(ValueError):
+            workers.validate({"roles": [impl, IMPL]}, "claude", ACCOUNTS, subagents=True)
+
+    def test_instructions_with_codex_subagents(self):
+        table = {"roles": [{"role": "implementer", "runs": "external", "model": "gpt-6.1-sol", "effort": "high"},
+                           {"role": "reviewer", "runs": "external", "model": "gpt-6-luna", "effort": "low"}], "account": None}
+        names = {"native": "claude", "external": "codex"}
+        text = workers.instructions("claude", table, names, subagents=True)
+        self.assertIn("| implementer | external (codex) | gpt-6.1-sol | high |", text)
+        self.assertIn("`subagent_type` `codex:<family>`", text)
+        self.assertIn("for the implementer, `approvals: ask`", text)
+        self.assertIn("`sandbox: read-only` and `approvals: never`", text)
+        # The fallback when the plugin does not answer: the one-shot recipe, never for the implementer.
+        self.assertIn("run the implementer as a native subagent", text)
+        self.assertIn("codex exec --dangerously-bypass-approvals-and-sandbox", text)
+        self.assertNotIn("codex:<family>", workers.instructions("claude", table, names))
+        self.assertNotIn("codex:<family>", workers.instructions("codex", {"roles": DEFAULT_ROLES, "account": None},
+                                                                {"native": "codex", "external": "claude"}, subagents=True))
+
     def test_old_saved_rows_get_the_default_model(self):
         t = workers.load_table({"roles": [{"role": "reviewer", "runs": "external", "effort": "high"}]}, "codex")
         self.assertEqual(t["roles"][0]["model"], "sonnet")
