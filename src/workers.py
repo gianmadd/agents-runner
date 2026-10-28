@@ -164,7 +164,11 @@ def read_quota(provider, account):
     if provider == "claude":
         out = subprocess.run(["claude", "-p", "/usage", "--output-format", "json", "--no-session-persistence"],
                              env=env, cwd=tempfile.gettempdir(), capture_output=True, text=True, timeout=30)
-        return parse_claude_usage(json.loads(out.stdout).get("result", ""))
+        text = json.loads(out.stdout).get("result", "")
+        windows = parse_claude_usage(text)
+        if not windows:  # e.g. an expired login: /usage falls back to the session cost
+            raise RuntimeError("no quota in /usage — login expired? " + text.strip().split("\n")[0])
+        return windows
     handshake = "\n".join(json.dumps(m) for m in [
         {"id": 1, "method": "initialize", "params": {"clientInfo": {"name": "workers", "version": "0"}}},
         {"method": "initialized"},
@@ -505,21 +509,21 @@ def claude_model(model, folder):
 
 
 def launch_argv(lead, text):
-    """New session: the table goes in as instructions. Resume: kept as it was, or, with update, Claude re-renders its
-    system prompt for this launch only (the recorded one returns on a later plain resume) and Codex, which keeps its
-    first instructions, gets the table as the first message."""
+    """New session: the table goes in as instructions. Resume: kept as it was, or, with update, the table comes as the
+    first message, so the cached conversation stays valid (a changed system prompt would rewrite the whole cache).
+    Claude always gets it appended to the system prompt too: its recorded prompt ignores that until the next compaction,
+    which re-renders the prompt and would otherwise drop the table."""
     p, flags, resume = lead["provider"], [], lead.get("resume")
+    message = ["The worker table of this session changed. From now on follow this one, not the one in your instructions.\n\n" + text] if lead["update"] else []
     if p == "claude":
         flags += ["--model", claude_model(lead["model"], lead.get("folder")), "--effort", lead["effort"]]
         if not resume:
             return ["claude", *flags, "--append-system-prompt", text]
-        update = ["--system-prompt-snapshot", "off", "--append-system-prompt", text] if lead["update"] else []
-        return ["claude", "--resume", resume, *flags, *update]
+        return ["claude", "--resume", resume, *flags, "--append-system-prompt", text, *message]
     flags += ["-m", lead["model"], "-c", f"model_reasoning_effort={lead['effort']}"]
     if not resume:
         return ["codex", *flags, "-c", "developer_instructions=" + json.dumps(text)]  # a JSON string is a valid TOML string
-    update = ["The worker table of this session changed. From now on follow this one, not the one in your instructions.\n\n" + text] if lead["update"] else []
-    return ["codex", "resume", *flags, resume, *update]
+    return ["codex", "resume", *flags, resume, *message]
 
 
 def main():

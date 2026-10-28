@@ -120,9 +120,11 @@ class Lead(unittest.TestCase):
 
     def test_resume_argv(self):
         lead = {"provider": "claude", "model": "sonnet", "effort": "high", "resume": "abc", "update": False}
-        self.assertEqual(workers.launch_argv(lead, "T"), ["claude", "--resume", "abc", "--model", "sonnet", "--effort", "high"])
-        self.assertEqual(workers.launch_argv({**lead, "update": True}, "T")[-4:],
-                         ["--system-prompt-snapshot", "off", "--append-system-prompt", "T"])
+        self.assertEqual(workers.launch_argv(lead, "T"), ["claude", "--resume", "abc", "--model", "sonnet", "--effort", "high", "--append-system-prompt", "T"])
+        argv = workers.launch_argv({**lead, "update": True}, "T")
+        self.assertNotIn("--system-prompt-snapshot", argv)  # the recorded prompt, and so the cache, stays
+        self.assertEqual(argv[-3:-1], ["--append-system-prompt", "T"])
+        self.assertTrue(argv[-1].endswith("\n\nT"))
         argv = workers.launch_argv({**lead, "provider": "codex", "model": "gpt-6.1-sol", "update": True}, "T")
         self.assertEqual(argv[:2] + argv[-2:-1], ["codex", "resume", "abc"])
         self.assertTrue(argv[-1].endswith("\n\nT"))

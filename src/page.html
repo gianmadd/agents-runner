@@ -162,7 +162,7 @@
   </main>
   <aside class="pane">
     <div class="hd">
-      <div class="top"><div><h1>Start a session</h1><span class="repo" id="repo"></span></div><button class="theme" id="theme" type="button"></button></div>
+      <div class="top"><div><h1>Start a session</h1><span class="repo" id="repo"></span></div><span><button class="theme" id="refresh" type="button" aria-label="Refresh quotas" title="Refresh quotas">↻</button> <button class="theme" id="theme" type="button"></button></span></div>
       <input class="search" id="q" placeholder="Search sessions" spellcheck="false" aria-label="Search sessions">
       <div class="chips" id="chips"></div>
     </div>
@@ -260,7 +260,7 @@ function wins(p, i) {
     bar.append(fill);
     const at = el('div', 'when');
     if (w && w.resets) { const t = el('span', null, resetText(w.resets)); t.dataset.reset = w.resets; at.append(t); }
-    else at.textContent = q === undefined ? 'reading…' : read ? '' : 'quota n/a';
+    else { at.textContent = q === undefined ? 'reading…' : read ? '' : 'quota n/a'; if (q && q.error) at.title = q.error; }
     // A per-model weekly limit (e.g. "7d Fable") goes on the 7d line.
     if (label === '7d' && read) for (const n of read.filter(x => !['5h', '7d'].includes(x.label))) at.append(el('span', n.used >= 90 ? 'note hot' : 'note', ` · ${n.label.replace(/^7d /, '')} ${Math.round(n.used)}%`));
     row.append(el('span', 'lbl', label), bar, el('span', 'pct' + (w && w.used >= 90 ? ' hot' : ''), w ? `${Math.round(w.used)}%` : q === undefined ? '–' : 'n/a'), at);
@@ -268,10 +268,14 @@ function wins(p, i) {
   }
   return box;
 }
-for (const p of ['claude', 'codex']) S.accounts[p].forEach((_, i) => {
+// Read every account's quota; the ↻ button reads them all again.
+const readQuotas = () => { for (const p of ['claude', 'codex']) S.accounts[p].forEach((_, i) => {
   const done = q => { quota[`${p}|${i}`] = q; document.querySelectorAll(`[data-q="${p}|${i}"]`).forEach(b => b.replaceWith(wins(p, i))); };
+  done(undefined);
   fetch(`quota/${p}/${i}`).then(r => r.json()).then(q => done(q.error ? {error: q.error} : q.windows)).catch(() => done({error: ''}));
-});
+}); };
+readQuotas();
+$('refresh').onclick = readQuotas;
 
 // An account card: a button that makes it the lead for a new session, or a plain card when it can't change.
 function card(p, i, pick) {
