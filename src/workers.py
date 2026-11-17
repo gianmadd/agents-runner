@@ -38,7 +38,7 @@ LEADS = {
     "claude": {"haiku": _E5, "sonnet": _E5, "opus": _E5, "fable": _E5},
     "codex": {"gpt-6-luna": _E5, "gpt-6.1-terra": _E5 + ["ultra"], "gpt-6.1-sol": _E5 + ["ultra"]},
 }
-LEAD_DEFAULT = {"claude": {"model": "opus", "effort": "medium"}, "codex": {"model": "gpt-6.1-sol", "effort": "medium"}}
+LEAD_DEFAULT = {"claude": {"model": "opus", "effort": "high"}, "codex": {"model": "gpt-6.1-sol", "effort": "high"}}
 OTHER = {"claude": "codex", "codex": "claude"}
 ENV = {"claude": "CLAUDE_CONFIG_DIR", "codex": "CODEX_HOME"}
 DEFAULT_DIR = {"claude": "~/.claude", "codex": "~/.codex"}
