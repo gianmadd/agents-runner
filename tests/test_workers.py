@@ -50,23 +50,23 @@ class Table(unittest.TestCase):
         with self.assertRaises(ValueError):  # a Claude model on the Codex side, and an effort luna lacks
             workers.validate({"roles": [{"role": "x", "runs": "external", "model": "opus", "effort": "low"}]}, "claude", ACCOUNTS)
         with self.assertRaises(ValueError):
-            workers.validate({"roles": [{"role": "x", "runs": "external", "model": "gpt-6-luna", "effort": "ultra"}]}, "claude", ACCOUNTS)
+            workers.validate({"roles": [{"role": "x", "runs": "external", "model": "luna", "effort": "ultra"}]}, "claude", ACCOUNTS)
 
     def test_validate_keeps_model_and_effort(self):
-        t = workers.validate({"roles": [IMPL, {"role": "reviewer", "runs": "external", "model": "gpt-6.1-sol", "effort": "ultra"}]}, "claude", ACCOUNTS)
-        self.assertEqual(t["roles"][1]["model"], "gpt-6.1-sol")
+        t = workers.validate({"roles": [IMPL, {"role": "reviewer", "runs": "external", "model": "sol", "effort": "ultra"}]}, "claude", ACCOUNTS)
+        self.assertEqual(t["roles"][1]["model"], "sol")
 
     def test_implementer_is_always_native(self):
         for roles in ([{"role": "reviewer", "runs": "native", "model": "sonnet", "effort": "low"}],
-                      [{"role": "implementer", "runs": "external", "model": "gpt-6-luna", "effort": "low"}],
+                      [{"role": "implementer", "runs": "external", "model": "luna", "effort": "low"}],
                       [IMPL, IMPL]):
             with self.assertRaises(ValueError):
                 workers.validate({"roles": roles}, "claude", ACCOUNTS)
 
     def test_single_cli_runs_every_worker_native(self):
         with self.assertRaises(ValueError):
-            workers.validate({"roles": [IMPL, {"role": "reviewer", "runs": "external", "model": "gpt-6-luna", "effort": "low"}]}, "claude", [])
-        t = workers.native_only({"roles": [IMPL, {"role": "reviewer", "runs": "external", "model": "gpt-6.1-sol", "effort": "ultra"}]}, "claude")
+            workers.validate({"roles": [IMPL, {"role": "reviewer", "runs": "external", "model": "luna", "effort": "low"}]}, "claude", [])
+        t = workers.native_only({"roles": [IMPL, {"role": "reviewer", "runs": "external", "model": "sol", "effort": "ultra"}]}, "claude")
         self.assertEqual(t["roles"][1], {"role": "reviewer", "runs": "native", "model": "sonnet", "effort": "medium"})
         self.assertEqual(workers.validate(t, "claude", [])["account"], None)
 
@@ -76,7 +76,7 @@ class Table(unittest.TestCase):
         self.assertIsNone(t["account"])
 
     def test_instructions_from_claude_point_at_codex(self):
-        text = workers.instructions("claude", {"roles": [{"role": "reviewer", "runs": "external", "model": "gpt-6-luna", "effort": "medium"},
+        text = workers.instructions("claude", {"roles": [{"role": "reviewer", "runs": "external", "model": "luna", "effort": "medium"},
                                                          {"role": "implementer", "runs": "native", "model": "opus", "effort": "max"}],
                                                "account": None}, {"native": "claude-work", "external": "codex"})
         self.assertIn("| reviewer | external (codex) | gpt-6-luna | medium |", text)
@@ -102,7 +102,7 @@ class Table(unittest.TestCase):
             self.assertFalse(workers.codex_subagents(d))
 
     def test_implementer_runs_external_only_with_codex_subagents(self):
-        impl = {"role": "implementer", "runs": "external", "model": "gpt-6.1-sol", "effort": "high"}
+        impl = {"role": "implementer", "runs": "external", "model": "sol", "effort": "high"}
         with self.assertRaises(ValueError):
             workers.validate({"roles": [impl]}, "claude", ACCOUNTS)
         self.assertEqual(workers.validate({"roles": [impl]}, "claude", ACCOUNTS, subagents=True)["roles"], [impl])
@@ -110,11 +110,11 @@ class Table(unittest.TestCase):
             workers.validate({"roles": [impl, IMPL]}, "claude", ACCOUNTS, subagents=True)
 
     def test_instructions_with_codex_subagents(self):
-        table = {"roles": [{"role": "implementer", "runs": "external", "model": "gpt-6.1-sol", "effort": "high"},
-                           {"role": "reviewer", "runs": "external", "model": "gpt-6-luna", "effort": "low"}], "account": None}
+        table = {"roles": [{"role": "implementer", "runs": "external", "model": "sol", "effort": "high"},
+                           {"role": "reviewer", "runs": "external", "model": "luna", "effort": "low"}], "account": None}
         names = {"native": "claude", "external": "codex"}
         text = workers.instructions("claude", table, names, subagents=True)
-        self.assertIn("| implementer | external (codex) | gpt-6.1-sol | high |", text)
+        self.assertIn("| implementer | external (codex) | gpt-6.2-sol | high |", text)
         self.assertIn("`subagent_type` `codex:<family>`", text)
         self.assertIn("for the implementer, `network: on` and `approvals: auto`", text)
         self.assertIn("`sandbox: read-only` and `approvals: never`", text)
@@ -132,7 +132,7 @@ class Table(unittest.TestCase):
 
     def test_default_table_is_all_native(self):
         roles = workers.load_table(None, "codex")["roles"]
-        self.assertEqual([(r["runs"], r["model"]) for r in roles], [("native", "gpt-6-luna")] * 3)
+        self.assertEqual([(r["runs"], r["model"]) for r in roles], [("native", "luna")] * 3)
 
     def test_instructions_from_codex_name_the_claude_account(self):
         text = workers.instructions("codex", {"roles": DEFAULT_ROLES, "account": "~/.claude-work"}, {"native": "codex", "external": "claude-work"})
@@ -165,9 +165,23 @@ class Lead(unittest.TestCase):
         self.assertNotIn("--system-prompt-snapshot", argv)  # the recorded prompt, and so the cache, stays
         self.assertEqual(argv[-3:-1], ["--append-system-prompt", "T"])
         self.assertTrue(argv[-1].endswith("\n\nT"))
-        argv = workers.launch_argv({**lead, "provider": "codex", "model": "gpt-6.1-sol", "update": True}, "T")
+        argv = workers.launch_argv({**lead, "provider": "codex", "model": "sol", "update": True}, "T")
         self.assertEqual(argv[:2] + argv[-2:-1], ["codex", "resume", "abc"])
         self.assertTrue(argv[-1].endswith("\n\nT"))
+
+    def test_codex_model_picks_the_newest_listed_version(self):
+        self.assertEqual(workers.codex_model("sol"), "gpt-6.2-sol")  # gpt-9-sol is hidden
+        self.assertEqual(workers.codex_model("terra"), "gpt-6.10-terra")  # numeric, not text, order
+        self.assertEqual(workers.codex_model("luna"), "gpt-6-luna")
+        self.assertEqual(workers.codex_model("sol", "/missing/cache.json"), "sol")
+
+    def test_saved_versions_become_families(self):
+        with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as f:
+            json.dump({"lead": {"model": "gpt-6.1-sol"}, "tables": {"claude": {"roles": [{"model": "gpt-6-luna"}, {"model": "sonnet"}]}}}, f)
+        saved = workers.load_saved(f.name)
+        os.unlink(f.name)
+        self.assertEqual(saved["lead"]["model"], "sol")
+        self.assertEqual([r["model"] for r in saved["tables"]["claude"]["roles"]], ["luna", "sonnet"])
 
     def test_claude_model_keeps_the_accounts_variant(self):
         with tempfile.TemporaryDirectory() as d:
@@ -180,9 +194,14 @@ class Lead(unittest.TestCase):
     def test_launch_argv(self):
         self.assertEqual(workers.launch_argv({"provider": "claude", "model": "sonnet", "effort": "high", "update": True}, "T"),
                          ["claude", "--model", "sonnet", "--effort", "high", "--append-system-prompt", "T"])
-        self.assertEqual(workers.launch_argv({"provider": "codex", "model": "gpt-6.1-sol", "effort": "high", "update": True}, "T"),
-                         ["codex", "-m", "gpt-6.1-sol", "-c", "model_reasoning_effort=high", "-c", 'developer_instructions="T"'])
+        self.assertEqual(workers.launch_argv({"provider": "codex", "model": "sol", "effort": "high", "update": True}, "T"),
+                         ["codex", "-m", "gpt-6.2-sol", "-c", "model_reasoning_effort=high", "-c", 'developer_instructions="T"'])
 
+_CACHE = tempfile.NamedTemporaryFile("w", suffix=".json", delete=False)
+json.dump({"models": [{"slug": s, "visibility": v} for s, v in
+                      [("gpt-6.1-sol", "list"), ("gpt-6.2-sol", "list"), ("gpt-9-sol", "hide"), ("gpt-6-luna", "list"), ("gpt-5.6-luna", "list"), ("gpt-6.9-terra", "list"), ("gpt-6.10-terra", "list")]]}, _CACHE)
+_CACHE.close()
+workers.CODEX_CACHE = _CACHE.name  # tests never read the real ~/.codex cache
 DEFAULT_ROLES = workers.load_table(None, "codex")["roles"]
 ACCOUNTS = [{"folder": None, "name": "claude"}, {"folder": "~/.claude-work", "name": "claude-work"}]
 ROME = zoneinfo.ZoneInfo("Europe/Rome")
@@ -200,7 +219,7 @@ class Sessions(unittest.TestCase):
 
 
 IMPL = {"role": "implementer", "runs": "native", "model": "sonnet", "effort": "medium"}
-IMPL_CODEX = {"role": "implementer", "runs": "native", "model": "gpt-6-luna", "effort": "medium"}
+IMPL_CODEX = {"role": "implementer", "runs": "native", "model": "luna", "effort": "medium"}
 
 if __name__ == "__main__":
     unittest.main()

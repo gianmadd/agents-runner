@@ -25,20 +25,22 @@ ZSTD_ERROR = (zstd.ZstdError,) if zstd else ()
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 _E5 = ["low", "medium", "high", "xhigh", "max"]
-# Worker models per provider, weakest first, each with the efforts its CLI accepts (codex: ~/.codex/models_cache.json).
+# Worker models per provider, weakest first, each with the efforts its CLI accepts. Families, not versions: Claude's CLI
+# resolves its aliases, codex_model() picks the newest Codex version of a family at launch.
 MODELS = {
     "claude": {"haiku": _E5, "sonnet": _E5, "opus": _E5},
-    "codex": {"gpt-6-luna": _E5, "gpt-6.1-terra": _E5 + ["ultra"], "gpt-6.1-sol": _E5 + ["ultra"]},
+    "codex": {"luna": _E5, "terra": _E5 + ["ultra"], "sol": _E5 + ["ultra"]},
 }
-DEFAULT_MODEL = {"claude": "sonnet", "codex": "gpt-6-luna"}
+DEFAULT_MODEL = {"claude": "sonnet", "codex": "luna"}
 # The account external runs use until a table is saved, by alias name; falls back to the first account.
 DEFAULT_EXTERNAL = {}
 # Orchestrator models, weakest first; LEAD_DEFAULT is preselected (opus for Claude, sol as Codex's config).
 LEADS = {
     "claude": {"haiku": _E5, "sonnet": _E5, "opus": _E5, "fable": _E5},
-    "codex": {"gpt-6-luna": _E5, "gpt-6.1-terra": _E5 + ["ultra"], "gpt-6.1-sol": _E5 + ["ultra"]},
+    "codex": {"luna": _E5, "terra": _E5 + ["ultra"], "sol": _E5 + ["ultra"]},
 }
-LEAD_DEFAULT = {"claude": {"model": "opus", "effort": "high"}, "codex": {"model": "gpt-6.1-sol", "effort": "high"}}
+LEAD_DEFAULT = {"claude": {"model": "opus", "effort": "high"}, "codex": {"model": "sol", "effort": "high"}}
+CODEX_CACHE = "~/.codex/models_cache.json"
 OTHER = {"claude": "codex", "codex": "claude"}
 ENV = {"claude": "CLAUDE_CONFIG_DIR", "codex": "CODEX_HOME"}
 DEFAULT_DIR = {"claude": "~/.claude", "codex": "~/.codex"}
@@ -309,7 +311,7 @@ def load_saved(path):
     """{provider: last confirmed table}: models differ per provider, so each keeps its own."""
     try:
         with open(path) as f:
-            saved = json.load(f)
+            saved = json.loads(re.sub(r'"gpt-[\d.]+-([a-z]+)"', r'"\1"', f.read()))  # tables saved with versions: gpt-6.1-sol → sol
         return saved if isinstance(saved, dict) else {}
     except (OSError, ValueError, TypeError):
         return {}
@@ -356,6 +358,18 @@ def validate(table, provider, external_accounts, subagents=False):
     return {"roles": roles, "account": account}
 
 
+def codex_model(family, cache=None):
+    """The newest listed Codex version of a family ("sol" → "gpt-6.2-sol"), from the codex CLI's own model cache."""
+    try:
+        with open(expand(cache or CODEX_CACHE)) as f:
+            slugs = [m["slug"] for m in json.load(f)["models"] if m.get("visibility") == "list"]
+    except (OSError, ValueError, KeyError, TypeError):
+        slugs = []
+    found = [(tuple(map(int, m[1].split("."))), s) for s in slugs if (m := re.fullmatch(r"gpt-([\d.]+)-" + re.escape(family), s))]
+    # shortcut: no cache yet → the bare family, which codex rejects visibly; starting codex once fills the cache
+    return max(found)[1] if found else family
+
+
 def instructions(provider, table, names, subagents=False):
     """The text injected into the session: the table and how to run an external worker. names: native/external → account name.
     subagents: a Claude session with the codex plugin, where an external worker is a codex:<family> subagent."""
@@ -373,7 +387,7 @@ def instructions(provider, table, names, subagents=False):
         wait = "start it as a background terminal, then poll it with an empty `write_stdin` (long waits, up to 300 s) until it exits"
     rows = "\n".join(
         f"| {r['role']} | {r['runs']} ({names[r['runs']]}) | "
-        f"{r['model']} | {r['effort']} |"
+        f"{codex_model(r['model']) if (provider if r['runs'] == 'native' else other) == 'codex' else r['model']} | {r['effort']} |"
         for r in table["roles"])
     headless = f"""  1. Create `{folder}/` (paths relative to the repo root, absolute in the command) and write the whole task to `prompt.md` there, ending with the repo's git rules: never push, never touch the main branch.
   2. From the folder the worker must work in (the ticket's worktree, if any), {wait}:
@@ -556,7 +570,7 @@ def launch_argv(lead, text):
         if not resume:
             return ["claude", *flags, "--append-system-prompt", text]
         return ["claude", "--resume", resume, *flags, "--append-system-prompt", text, *message]
-    flags += ["-m", lead["model"], "-c", f"model_reasoning_effort={lead['effort']}"]
+    flags += ["-m", codex_model(lead["model"]), "-c", f"model_reasoning_effort={lead['effort']}"]
     if not resume:
         return ["codex", *flags, "-c", "developer_instructions=" + json.dumps(text)]  # a JSON string is a valid TOML string
     return ["codex", "resume", *flags, resume, *message]
